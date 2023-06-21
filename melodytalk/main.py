@@ -7,22 +7,32 @@ import numpy as np
 import torch
 import os
 import re
+import random
 
+# audio processing
+import torchaudio
+
+# langchain interface
+from langchain.agents.agent_types import AgentType
 from langchain.agents.initialize import initialize_agent
 from langchain.agents.tools import Tool
 from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.llms.openai import OpenAI
 
+# MusicGen
+from audiocraft.models import MusicGen
+from audiocraft.data.audio import audio_write
+
 
 MELODYTALK_PREFIX = """MelodyTalk is designed to be able to assist with a wide range of text and music related tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. MelodyTalk is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.
 
-MelodyTalk is able to process and understand large amounts of text and music. As a language model, MelodyTalk can not directly read audios, but it has a list of tools to finish different music and audio tasks. Each audio will have a file name formed as "audio/xxx.png", and MelodyTalk can invoke different tools to indirectly understand audios. When talking about audios, MelodyTalk is very strict to the file name and will never fabricate nonexistent files. 
+MelodyTalk is able to process and understand large amounts of text and music. As a language model, MelodyTalk can not directly read music, but it has a list of tools to finish different music tasks. Each music will have a file name formed as "music/xxx.wav", and MelodyTalk can invoke different tools to indirectly understand music. When talking about music, MelodyTalk is very strict to the file name and will never fabricate nonexistent files. 
 
-MelodyTalk is able to use tools in a sequence, and is loyal to the tool observation outputs rather than faking the audio content and audio file name. It will remember to provide the file name from the last tool observation, if a new audio is generated.
+MelodyTalk is able to use tools in a sequence, and is loyal to the tool observation outputs rather than faking the music content and music file name. It will remember to provide the file name from the last tool observation, if a new music is generated.
 
-Human may provide new audios to MelodyTalk with a description. The description helps MelodyTalk to understand this audio, but MelodyTalk should use tools to finish following tasks, rather than directly imagine from the description.
+Human may provide new music to MelodyTalk with a description. The description helps MelodyTalk to understand this music, but MelodyTalk should use tools to finish following tasks, rather than directly imagine from the description.
 
-Overall, MelodyTalk is a powerful audio dialogue assistant tool that can help with a wide range of tasks and provide valuable insights and information on a wide range of topics. 
+Overall, MelodyTalk is a powerful music dialogue assistant tool that can help with a wide range of tasks and provide valuable insights and information on a wide range of topics. 
 
 
 TOOLS:
@@ -48,7 +58,7 @@ Thought: Do I need to use a tool? No
 """
 
 MELODYTALK_SUFFIX = """You are very strict to the filename correctness and will never fake a file name if it does not exist.
-You will remember to provide the audio file name loyally if it's provided in the last tool observation.
+You will remember to provide the music file name loyally if it's provided in the last tool observation.
 
 Begin!
 
@@ -56,20 +66,23 @@ Previous conversation history:
 {chat_history}
 
 New input: {input}
-Since MelodyTalk is a text language model, MelodyTalk must use tools to observe audios rather than imagination.
-The thoughts and observations are only visible for MelodyTalk, MelodyTalk should remember to repeat important information in the final response for Human. 
 Thought: Do I need to use a tool? {agent_scratchpad} Let's think step by step.
 """
 
+# removed from melodytalk_suffix:
+    # Since MelodyTalk is a text language model, MelodyTalk must use tools to observe music rather than imagination.
+    # The thoughts and observations are only visible for MelodyTalk, MelodyTalk should remember to repeat important information in the final response for Human.
+
+
 MELODYTALK_PREFIX_CN = """MelodyTalk被设计成能够协助完成各种文本和音乐相关的任务，从回答简单的问题到提供深入的解释和对各种主题的讨论。MelodyTalk能够根据其收到的输入生成类似人类的文本，使其能够参与自然的对话，并提供与当前主题相关的连贯的回应。
 
-MelodyTalk能够处理和理解大量的文本和音乐。作为一个语言模型，MelodyTalk不能直接阅读音频，但它有一系列工具来完成不同的音乐和音频任务。每个音频都会有一个文件名，形成 "audio/xxx.png"，MelodyTalk可以调用不同的工具来间接理解音频。当谈及音频时，MelodyTalk对文件名的要求非常严格，绝不会编造不存在的文件。
+MelodyTalk能够处理和理解大量的文本和音乐。作为一个语言模型，MelodyTalk不能直接阅读音乐，但它有一系列工具来完成不同的音乐任务。每个音乐都会有一个文件名，形成 "music/xxx.wav"，MelodyTalk可以调用不同的工具来间接理解音乐。当谈及音乐时，MelodyTalk对文件名的要求非常严格，绝不会编造不存在的文件。
 
-MelodyTalk能够按顺序使用工具，并忠于工具观察输出，而不是伪造音频内容和音频文件名。如果有新的音频产生，它将记得提供上一个工具观察的文件名。
+MelodyTalk能够按顺序使用工具，并忠于工具观察输出，而不是伪造音乐内容和音乐文件名。如果有新的音乐产生，它将记得提供上一个工具观察的文件名。
 
-人类可以向MelodyTalk提供带有描述的新音频。描述可以帮助MelodyTalk理解这个音频，但是MelodyTalk应该使用工具来完成以下任务，而不是直接从描述中想象。
+人类可以向MelodyTalk提供带有描述的新音乐。描述可以帮助MelodyTalk理解这个音乐，但是MelodyTalk应该使用工具来完成以下任务，而不是直接从描述中想象。
 
-总的来说，MelodyTalk是一个强大的音频对话助手工具，可以帮助完成各种任务，并提供关于各种主题的宝贵见解和信息。
+总的来说，MelodyTalk是一个强大的音乐对话助手工具，可以帮助完成各种任务，并提供关于各种主题的宝贵见解和信息。
 
 工具列表:
 ------
@@ -98,7 +111,7 @@ MELODYTALK_SUFFIX_CN = """你对文件名的正确性非常严格，而且永远
 
 开始!
 
-因为MelodyTalk是一个文本语言模型，必须使用工具去观察音频而不是依靠想象。
+因为MelodyTalk是一个文本语言模型，必须使用工具去观察音乐而不是依靠想象。
 推理想法和观察结果只对MelodyTalk可见，需要记得在最终回复时把重要的信息重复给用户，你只能给用户返回中文句子。我们一步一步思考。在你使用工具时，工具的参数只能是英文。
 
 聊天历史:
@@ -139,8 +152,8 @@ def prompts(name, description):
 
     return decorator
 
-def get_new_image_name(org_img_name, func_name="update"):
-    head_tail = os.path.split(org_img_name)
+def get_new_audio_name(org_audio_name, func_name="update"):
+    head_tail = os.path.split(org_audio_name)
     head = head_tail[0]
     tail = head_tail[1]
     name_split = tail.split('.')[0].split('_')
@@ -151,15 +164,39 @@ def get_new_image_name(org_img_name, func_name="update"):
         assert len(name_split) == 4
         most_org_file_name = name_split[3]
     recent_prev_file_name = name_split[0]
-    new_file_name = f'{this_new_uuid}_{func_name}_{recent_prev_file_name}_{most_org_file_name}.png'
+    new_file_name = f'{this_new_uuid}_{func_name}_{recent_prev_file_name}_{most_org_file_name}.wav'
     return os.path.join(head, new_file_name)
 
-class ConversationBot:
+
+class Text2Music(object):
+    def __init__(self, device):
+        print("Initializing Text2Music")
+        self.device = device
+        self.model = MusicGen.get_pretrained('melody')
+
+    @prompts(
+        name="Generate music from user input text",
+        description="useful if you want to generate music from a user input text and save it to a file."
+                    "like: generate music of love pop song, or generate music with piano and violin."
+                    "The input to this tool should be a string, representing the text used to generate music."
+    )
+
+    def inference(self, text):
+        music_filename = os.path.join("music", f"{str(uuid.uuid4())[:8]}.wav")
+        prompt = text
+        wav = self.model.generate([text], progress=False)
+        wav = wav[0]  # batch size is 1
+        audio_write(music_filename[:-4],
+                    wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed Text2Music, Input Text: {text}, Output Music: {music_filename}.")
+        return music_filename
+
+
+class ConversationBot(object):
     def __init__(self, load_dict):
-        # load_dict = {'VisualQuestionAnswering':'cuda:0', 'ImageCaptioning':'cuda:1',...}
-        print(f"Initializing VisualChatGPT, load_dict={load_dict}")
-        if 'ImageCaptioning' not in load_dict:
-            raise ValueError("You have to load ImageCaptioning as a basic function for VisualChatGPT")
+        print(f"Initializing MelodyTalk, load_dict={load_dict}")
+        if 'Text2Music' not in load_dict:
+            raise ValueError("You have to load Text2Music as a basic function for MelodyTalk.")
 
         self.models = {}
         # Load Basic Foundation Models
@@ -191,16 +228,16 @@ class ConversationBot:
         self.memory.clear()  # clear previous history
         if lang == 'English':
             PREFIX, FORMAT_INSTRUCTIONS, SUFFIX = MELODYTALK_PREFIX, MELODYTALK_FORMAT_INSTRUCTIONS, MELODYTALK_SUFFIX
-            place = "Enter text and press enter, or upload an image"
+            place = "Enter text and press enter, or upload an audio"
             label_clear = "Clear"
         else:
             PREFIX, FORMAT_INSTRUCTIONS, SUFFIX = MELODYTALK_PREFIX_CN, MELODYTALK_FORMAT_INSTRUCTIONS_CN, MELODYTALK_SUFFIX_CN
-            place = "输入文字并回车，或者上传图片"
+            place = "输入文字并回车，或者上传音乐"
             label_clear = "清除"
         self.agent = initialize_agent(
             self.tools,
             self.llm,
-            agent="conversational-react-description",
+            agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
             verbose=True,
             memory=self.memory,
             return_intermediate_steps=True,
@@ -210,16 +247,21 @@ class ConversationBot:
             value=label_clear)
 
     def run_text(self, text, state):
-        self.agent.memory.buffer = cut_dialogue_history(self.agent.memory.buffer, keep_last_n_words=500)
+        # LangChain has changed its implementation, so we are not able to cut the dialogue history anymore.
+        # self.agent.memory.buffer = cut_dialogue_history(self.agent.memory.buffer, keep_last_n_words=500)
         res = self.agent({"input": text.strip()})
         res['output'] = res['output'].replace("\\", "/")
-        response = re.sub('(image/[-\w]*.png)', lambda m: f'![](file={m.group(0)})*{m.group(0)}*', res['output'])
-        state = state + [(text, response)]
+        state = state + [(text, res['output'])]
         print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
               f"Current Memory: {self.agent.memory.buffer}")
-        return state, state
+        if len(res['intermediate_steps']) > 0:
+            audio_filename = res['intermediate_steps'][0][1]
+            # audio_filename = re.sub('(music/[-\w]*.wav)', lambda m: f'![](file={m.group(0)})*{m.group(0)}*', res['output'])
+            return state, state, gr.Audio.update(value=audio_filename, visible=True)
+        else:
+            return state, state, gr.Audio.update(visible=False)
 
-    def run_image(self, image, state, txt, lang):
+    def run_audio(self, image, state, txt, lang):
         image_filename = os.path.join('image', f"{str(uuid.uuid4())[:8]}.png")
         print("======>Auto Resize Image...")
         img = False#Image.open(image.name)
@@ -264,13 +306,17 @@ if __name__ == '__main__':
             with gr.Column(scale=0.15, min_width=0):
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
-                btn = gr.UploadButton(label="🖼️",file_types=["audio"])
+                btn = gr.UploadButton("Upload",file_types=["audio"])
+
+        with gr.Row():
+            outaudio = gr.Audio(visible=False)
 
         lang.change(bot.init_agent, [lang], [input_raws, lang, txt, clear])
-        txt.submit(bot.run_text, [txt, state], [chatbot, state])
+        txt.submit(bot.run_text, [txt, state], [chatbot, state, outaudio])
         txt.submit(lambda: "", None, txt)
-        btn.upload(bot.run_image, [btn, state, txt, lang], [chatbot, state, txt])
+        btn.upload(bot.run_audio, [btn, state, txt, lang], [chatbot, state, txt])
         clear.click(bot.memory.clear)
         clear.click(lambda: [], None, chatbot)
         clear.click(lambda: [], None, state)
+        # clear.click(bot.clear_audio, None, outaudio)
     demo.launch(server_name="0.0.0.0", server_port=7860)
