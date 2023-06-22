@@ -65,13 +65,14 @@ Begin!
 Previous conversation history:
 {chat_history}
 
+Since MelodyTalk is a text language model, MelodyTalk must use tools to observe music rather than imagination. The thoughts and observations are only visible for MelodyTalk.
+
 New input: {input}
 Thought: Do I need to use a tool? {agent_scratchpad} Let's think step by step.
 """
 
 # removed from melodytalk_suffix:
-    # Since MelodyTalk is a text language model, MelodyTalk must use tools to observe music rather than imagination.
-    # The thoughts and observations are only visible for MelodyTalk, MelodyTalk should remember to repeat important information in the final response for Human.
+    # MelodyTalk should remember to repeat important information in the final response for Human.
 
 
 MELODYTALK_PREFIX_CN = """MelodyTalk被设计成能够协助完成各种文本和音乐相关的任务，从回答简单的问题到提供深入的解释和对各种主题的讨论。MelodyTalk能够根据其收到的输入生成类似人类的文本，使其能够参与自然的对话，并提供与当前主题相关的连贯的回应。
@@ -173,6 +174,9 @@ class Text2Music(object):
         print("Initializing Text2Music")
         self.device = device
         self.model = MusicGen.get_pretrained('melody')
+
+        # Set generation params
+        self.model.set_generation_params(duration=8)
 
     @prompts(
         name="Generate music from user input text",
