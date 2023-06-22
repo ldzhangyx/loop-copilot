@@ -258,14 +258,12 @@ class ConversationBot(object):
         res = self.agent({"input": text.strip()})
         res['output'] = res['output'].replace("\\", "/")
         state = state + [(text, res['output'])]
-        print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
-              f"Current Memory: {self.agent.memory.buffer}")
         if len(res['intermediate_steps']) > 0:
             audio_filename = res['intermediate_steps'][0][1]
-            # audio_filename = re.sub('(music/[-\w]*.wav)', lambda m: f'![](file={m.group(0)})*{m.group(0)}*', res['output'])
-            return state, state, gr.Audio.update(value=audio_filename, visible=True)
-        else:
-            return state, state, gr.Audio.update(visible=False)
+            state = state + [(None,(audio_filename,))]
+        print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
+              f"Current Memory: {self.agent.memory.buffer}")
+        return state, state
 
     def run_audio(self, file, state, txt, lang):
         music_filename = os.path.join('music', str(uuid.uuid4())[0:8] + ".wav")
@@ -275,25 +273,18 @@ class ConversationBot(object):
         # description = self.models['ImageCaptioning'].inference(image_filename)
         if lang == 'Chinese':
             Human_prompt = f'提供一个名为 {music_filename}的音乐。' \
-                           f'这些信息帮助你理解这个音乐，但是你应该使用工具来完成下面的任务，而不是直接从我的描述中想象。 如果你明白了, 说 \"收到\". \n'
+                           f'这些信息帮助你理解这个音乐，但是你应该使用工具来完成下面的任务，而不是直接从我的描述中想象。 如果你明白了, 说 \"收到\".'
             AI_prompt = "收到。  "
         else:
             Human_prompt = f'Provide a music named {music_filename}. ' \
-                           f'This information helps you to understand this music, but you should use tools to finish following tasks, rather than directly imagine from my description. If you understand, say \"Received\". \n'
+                           f'This information helps you to understand this music, but you should use tools to finish following tasks, rather than directly imagine from my description. If you understand, say \"Received\".'
             AI_prompt = "Received.  "
         self.agent.memory.chat_memory.add_user_message(Human_prompt)
         self.agent.memory.chat_memory.add_ai_message(AI_prompt)
-        state = state + [(f"![](file={music_filename})*{music_filename}*", AI_prompt)]
+        state = state + [((music_filename,), AI_prompt)]
         print(f"\nProcessed run_audio, Input music: {music_filename}\nCurrent state: {state}\n"
               f"Current Memory: {self.agent.memory.buffer}")
-        return state, state, f'{txt} {music_filename} '
-
-
-    def clear_audio(self):
-        return gr.Audio.update(value=None, visible=False)
-
-    def clear_input_audio(self):
-        return gr.Audio.update(value=None)
+        return state, state
 
 if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
@@ -318,15 +309,11 @@ if __name__ == '__main__':
             # with gr.Column(scale=0.15, min_width=0):
             #     rec = gr.A("Record",source="microphone",file_types=["audio"])
 
-        with gr.Row():
-            outaudio = gr.Audio(visible=False)
-
         lang.change(bot.init_agent, [lang], [input_raws, lang, txt, clear])
-        txt.submit(bot.run_text, [txt, state], [chatbot, state, outaudio])
+        txt.submit(bot.run_text, [txt, state], [chatbot, state])
         txt.submit(lambda: "", None, txt)
-        btn.upload(bot.run_audio, [btn, state, txt, lang], [chatbot, state, txt])
+        btn.upload(bot.run_audio, [btn, state, txt, lang], [chatbot, state])
         clear.click(bot.memory.clear)
         clear.click(lambda: [], None, chatbot)
         clear.click(lambda: [], None, state)
-        clear.click(bot.clear_audio, None, outaudio)
     demo.launch(server_name="0.0.0.0", server_port=7860)
