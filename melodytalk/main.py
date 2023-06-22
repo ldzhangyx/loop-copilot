@@ -113,7 +113,7 @@ MELODYTALK_SUFFIX_CN = """你对文件名的正确性非常严格，而且永远
 开始!
 
 因为MelodyTalk是一个文本语言模型，必须使用工具去观察音乐而不是依靠想象。
-推理想法和观察结果只对MelodyTalk可见，需要记得在最终回复时把重要的信息重复给用户，你只能给用户返回中文句子。我们一步一步思考。在你使用工具时，工具的参数只能是英文。
+推理想法和观察结果只对MelodyTalk可见，你只能给用户返回中文句子。我们一步一步思考。在你使用工具时，工具的参数只能是英文。
 
 聊天历史:
 {chat_history}
@@ -121,6 +121,8 @@ MELODYTALK_SUFFIX_CN = """你对文件名的正确性非常严格，而且永远
 新输入: {input}
 Thought: Do I need to use a tool? {agent_scratchpad}
 """
+
+# 需要记得在最终回复时把重要的信息重复给用户，
 
 def cut_dialogue_history(history_memory, keep_last_n_words=500):
     if history_memory is None or len(history_memory) == 0:
@@ -265,31 +267,33 @@ class ConversationBot(object):
         else:
             return state, state, gr.Audio.update(visible=False)
 
-    def run_audio(self, image, state, txt, lang):
-        image_filename = os.path.join('image', f"{str(uuid.uuid4())[:8]}.png")
-        print("======>Auto Resize Image...")
-        img = False#Image.open(image.name)
-        width, height = img.size
-        ratio = min(512 / width, 512 / height)
-        width_new, height_new = (round(width * ratio), round(height * ratio))
-        width_new = int(np.round(width_new / 64.0)) * 64
-        height_new = int(np.round(height_new / 64.0)) * 64
-        img = img.resize((width_new, height_new))
-        img = img.convert('RGB')
-        img.save(image_filename, "PNG")
-        print(f"Resize image form {width}x{height} to {width_new}x{height_new}")
-        description = self.models['ImageCaptioning'].inference(image_filename)
+    def run_audio(self, file, state, txt, lang):
+        music_filename = os.path.join('music', str(uuid.uuid4())[0:8] + ".wav")
+        print("Inputs:", file, state)
+        audio_load, sr = torchaudio.load(file.name)
+        audio_write(music_filename[:-4], audio_load, sr, strategy="loudness", loudness_compressor=True)
+        # description = self.models['ImageCaptioning'].inference(image_filename)
         if lang == 'Chinese':
-            Human_prompt = f'\nHuman: 提供一张名为 {image_filename}的图片。它的描述是: {description}。 这些信息帮助你理解这个图像，但是你应该使用工具来完成下面的任务，而不是直接从我的描述中想象。 如果你明白了, 说 \"收到\". \n'
+            Human_prompt = f'提供一个名为 {music_filename}的音乐。' \
+                           f'这些信息帮助你理解这个音乐，但是你应该使用工具来完成下面的任务，而不是直接从我的描述中想象。 如果你明白了, 说 \"收到\". \n'
             AI_prompt = "收到。  "
         else:
-            Human_prompt = f'\nHuman: provide a figure named {image_filename}. The description is: {description}. This information helps you to understand this image, but you should use tools to finish following tasks, rather than directly imagine from my description. If you understand, say \"Received\". \n'
+            Human_prompt = f'Provide a music named {music_filename}. ' \
+                           f'This information helps you to understand this music, but you should use tools to finish following tasks, rather than directly imagine from my description. If you understand, say \"Received\". \n'
             AI_prompt = "Received.  "
-        self.agent.memory.buffer = self.agent.memory.buffer + Human_prompt + 'AI: ' + AI_prompt
-        state = state + [(f"![](file={image_filename})*{image_filename}*", AI_prompt)]
-        print(f"\nProcessed run_image, Input image: {image_filename}\nCurrent state: {state}\n"
+        self.agent.memory.chat_memory.add_user_message(Human_prompt)
+        self.agent.memory.chat_memory.add_ai_message(AI_prompt)
+        state = state + [(f"![](file={music_filename})*{music_filename}*", AI_prompt)]
+        print(f"\nProcessed run_audio, Input music: {music_filename}\nCurrent state: {state}\n"
               f"Current Memory: {self.agent.memory.buffer}")
-        return state, state, f'{txt} {image_filename} '
+        return state, state, f'{txt} {music_filename} '
+
+
+    def clear_audio(self):
+        return gr.Audio.update(value=None, visible=False)
+
+    def clear_input_audio(self):
+        return gr.Audio.update(value=None)
 
 if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
@@ -311,6 +315,8 @@ if __name__ == '__main__':
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
                 btn = gr.UploadButton("Upload",file_types=["audio"])
+            # with gr.Column(scale=0.15, min_width=0):
+            #     rec = gr.A("Record",source="microphone",file_types=["audio"])
 
         with gr.Row():
             outaudio = gr.Audio(visible=False)
@@ -322,5 +328,5 @@ if __name__ == '__main__':
         clear.click(bot.memory.clear)
         clear.click(lambda: [], None, chatbot)
         clear.click(lambda: [], None, state)
-        # clear.click(bot.clear_audio, None, outaudio)
+        clear.click(bot.clear_audio, None, outaudio)
     demo.launch(server_name="0.0.0.0", server_port=7860)
