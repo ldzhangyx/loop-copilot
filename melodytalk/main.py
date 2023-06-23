@@ -250,7 +250,7 @@ class ConversationBot(object):
             agent_kwargs={'prefix': PREFIX, 'format_instructions': FORMAT_INSTRUCTIONS,
                           'suffix': SUFFIX}, )
         return gr.update(visible=True), gr.update(visible=False), gr.update(placeholder=place), gr.update(
-            value=label_clear)
+            value=label_clear), gr.update(visible=True)
 
     def run_text(self, text, state):
         # LangChain has changed its implementation, so we are not able to cut the dialogue history anymore.
@@ -268,7 +268,9 @@ class ConversationBot(object):
     def run_audio(self, file, state, txt, lang):
         music_filename = os.path.join('music', str(uuid.uuid4())[0:8] + ".wav")
         print("Inputs:", file, state)
-        audio_load, sr = torchaudio.load(file.name)
+        if not isinstance(file, str):  # recording pass a path, while button pass a file object
+            file = file.name
+        audio_load, sr = torchaudio.load(file)
         audio_write(music_filename[:-4], audio_load, sr, strategy="loudness", loudness_compressor=True)
         # description = self.models['ImageCaptioning'].inference(image_filename)
         if lang == 'Chinese':
@@ -285,6 +287,13 @@ class ConversationBot(object):
         print(f"\nProcessed run_audio, Input music: {music_filename}\nCurrent state: {state}\n"
               f"Current Memory: {self.agent.memory.buffer}")
         return state, state
+
+    def run_recording(self, file_path, state, txt, lang):
+
+        return self.run_audio(file_path, state, txt, lang)
+
+    def clear_input_audio(self):
+        return gr.Audio.update(value=None)
 
 if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
@@ -306,14 +315,26 @@ if __name__ == '__main__':
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
                 btn = gr.UploadButton("Upload",file_types=["audio"])
-            # with gr.Column(scale=0.15, min_width=0):
-            #     rec = gr.A("Record",source="microphone",file_types=["audio"])
 
-        lang.change(bot.init_agent, [lang], [input_raws, lang, txt, clear])
+        with gr.Row(visible=False) as record_raws:
+            with gr.Column(scale=0.7):
+                rec_audio = gr.Audio(source='microphone', type='filepath', interactive=True)
+            with gr.Column(scale=0.15, min_width=0):
+                rec_clear = gr.Button("Re-recording")
+            with gr.Column(scale=0.15, min_width=0):
+                rec_submit = gr.Button("Submit")
+
+        lang.change(bot.init_agent, [lang], [input_raws, lang, txt, clear, record_raws])
         txt.submit(bot.run_text, [txt, state], [chatbot, state])
         txt.submit(lambda: "", None, txt)
         btn.upload(bot.run_audio, [btn, state, txt, lang], [chatbot, state])
+
+        rec_submit.click(bot.run_recording, [rec_audio, state, txt, lang], [chatbot, state])
+        rec_clear.click(bot.clear_input_audio, None, rec_audio)
+
         clear.click(bot.memory.clear)
         clear.click(lambda: [], None, chatbot)
         clear.click(lambda: [], None, state)
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+        clear.click(bot.clear_input_audio, None, rec_audio)
+    demo.launch(server_name="0.0.0.0", server_port=7860,
+                ssl_certfile="cert.pem", ssl_keyfile="key.pem", ssl_verify=False)
