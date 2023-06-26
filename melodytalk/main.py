@@ -23,6 +23,9 @@ from langchain.llms.openai import OpenAI
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 
+from utils import prompts, seed_everything, cut_dialogue_history, get_new_audio_name
+from modules import Text2Music
+
 
 MELODYTALK_PREFIX = """MelodyTalk is designed to be able to assist with a wide range of text and music related tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. MelodyTalk is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.
 
@@ -72,8 +75,7 @@ Thought: Do I need to use a tool? {agent_scratchpad} Let's think step by step.
 """
 
 # removed from melodytalk_suffix:
-    # MelodyTalk should remember to repeat important information in the final response for Human.
-
+# MelodyTalk should remember to repeat important information in the final response for Human.
 
 MELODYTALK_PREFIX_CN = """MelodyTalk被设计成能够协助完成各种文本和音乐相关的任务，从回答简单的问题到提供深入的解释和对各种主题的讨论。MelodyTalk能够根据其收到的输入生成类似人类的文本，使其能够参与自然的对话，并提供与当前主题相关的连贯的回应。
 
@@ -121,81 +123,6 @@ MELODYTALK_SUFFIX_CN = """你对文件名的正确性非常严格，而且永远
 新输入: {input}
 Thought: Do I need to use a tool? {agent_scratchpad}
 """
-
-# 需要记得在最终回复时把重要的信息重复给用户，
-
-def cut_dialogue_history(history_memory, keep_last_n_words=500):
-    if history_memory is None or len(history_memory) == 0:
-        return history_memory
-    tokens = history_memory.split()
-    n_tokens = len(tokens)
-    print(f"history_memory:{history_memory}, n_tokens: {n_tokens}")
-    if n_tokens < keep_last_n_words:
-        return history_memory
-    paragraphs = history_memory.split('\n')
-    last_n_tokens = n_tokens
-    while last_n_tokens >= keep_last_n_words:
-        last_n_tokens -= len(paragraphs[0].split(' '))
-        paragraphs = paragraphs[1:]
-    return '\n' + '\n'.join(paragraphs)
-
-def seed_everything(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    return seed
-
-
-def prompts(name, description):
-    def decorator(func):
-        func.name = name
-        func.description = description
-        return func
-
-    return decorator
-
-def get_new_audio_name(org_audio_name, func_name="update"):
-    head_tail = os.path.split(org_audio_name)
-    head = head_tail[0]
-    tail = head_tail[1]
-    name_split = tail.split('.')[0].split('_')
-    this_new_uuid = str(uuid.uuid4())[:4]
-    if len(name_split) == 1:
-        most_org_file_name = name_split[0]
-    else:
-        assert len(name_split) == 4
-        most_org_file_name = name_split[3]
-    recent_prev_file_name = name_split[0]
-    new_file_name = f'{this_new_uuid}_{func_name}_{recent_prev_file_name}_{most_org_file_name}.wav'
-    return os.path.join(head, new_file_name)
-
-
-class Text2Music(object):
-    def __init__(self, device):
-        print("Initializing Text2Music")
-        self.device = device
-        self.model = MusicGen.get_pretrained('melody')
-
-        # Set generation params
-        self.model.set_generation_params(duration=8)
-
-    @prompts(
-        name="Generate music from user input text",
-        description="useful if you want to generate music from a user input text and save it to a file."
-                    "like: generate music of love pop song, or generate music with piano and violin."
-                    "The input to this tool should be a string, representing the text used to generate music."
-    )
-
-    def inference(self, text):
-        music_filename = os.path.join("music", f"{str(uuid.uuid4())[:8]}.wav")
-        prompt = text
-        wav = self.model.generate([text], progress=False)
-        wav = wav[0]  # batch size is 1
-        audio_write(music_filename[:-4],
-                    wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
-        print(f"\nProcessed Text2Music, Input Text: {text}, Output Music: {music_filename}.")
-        return music_filename
 
 
 class ConversationBot(object):
