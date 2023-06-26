@@ -186,7 +186,7 @@ class ConversationBot(object):
         res['output'] = res['output'].replace("\\", "/")
         state = state + [(text, res['output'])]
         if len(res['intermediate_steps']) > 0:
-            audio_filename = res['intermediate_steps'][0][1]
+            audio_filename = res['intermediate_steps'][-1][1]
             state = state + [(None,(audio_filename,))]
         print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
               f"Current Memory: {self.agent.memory.buffer}")
