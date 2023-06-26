@@ -24,7 +24,7 @@ from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 
 from utils import prompts, seed_everything, cut_dialogue_history, get_new_audio_name
-from modules import Text2Music
+from modules import *
 
 
 MELODYTALK_PREFIX = """MelodyTalk is designed to be able to assist with a wide range of text and music related tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. MelodyTalk is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.
@@ -43,7 +43,7 @@ TOOLS:
 
 MelodyTalk has access to the following tools:"""
 
-MELODYTALK_FORMAT_INSTRUCTIONS = """To use a tool, please use the following format:
+MELODYTALK_FORMAT_INSTRUCTIONS = """To use a tool, you MUST use the following format:
 
 ```
 Thought: Do I need to use a tool? Yes
@@ -226,7 +226,7 @@ if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
         os.mkdir("checkpoints")
     parser = argparse.ArgumentParser()
-    parser.add_argument('--load', type=str, default="Text2Music_cuda:0")
+    parser.add_argument('--load', type=str, default="Text2Music_cuda:0, ExtractTrack_cuda:0")
     args = parser.parse_args()
     load_dict = {e.split('_')[0].strip(): e.split('_')[1].strip() for e in args.load.split(',')}
     bot = ConversationBot(load_dict=load_dict)
