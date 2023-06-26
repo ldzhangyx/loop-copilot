@@ -226,7 +226,7 @@ if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
         os.mkdir("checkpoints")
     parser = argparse.ArgumentParser()
-    parser.add_argument('--load', type=str, default="Text2Music_cuda:0, ExtractTrack_cuda:0")
+    parser.add_argument('--load', type=str, default="Text2Music_cuda:0, ExtractTrack_cuda:0, Text2MusicWithMelody_cuda:0")
     args = parser.parse_args()
     load_dict = {e.split('_')[0].strip(): e.split('_')[1].strip() for e in args.load.split(',')}
     bot = ConversationBot(load_dict=load_dict)
