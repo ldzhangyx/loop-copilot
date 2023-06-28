@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import os
 import openai
+import typing as tp
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -38,7 +39,7 @@ def prompts(name, description):
 
     return decorator
 
-def get_new_audio_name(org_audio_name, func_name="update"):
+def get_new_audio_name(org_audio_name: str, func_name: str ="update") -> str:
     head_tail = os.path.split(org_audio_name)
     head = head_tail[0]
     tail = head_tail[1]
@@ -86,7 +87,7 @@ def description_to_attributes(description: str) -> str:
     return response.choices[0].text
 
 
-def chord_generation(description: str, chord_num: int = 4) -> str:
+def chord_generation(description: str, chord_num: int = 4) -> tp.List:
     """ This function is a trick to generate chord sequence from the description.
 
     :param description:
@@ -97,7 +98,7 @@ def chord_generation(description: str, chord_num: int = 4) -> str:
     openai_prompt = f"""Please generate a chord sequence consists of according to the text description. Example:
 
     Q: Generate a chord sequence for sad pop song. 4 chords.
-    A:  Dm - Bb - F - C
+    A: Dm - Bb - F - C
     
     Q: {description}. {chord_num} chords.
     A:
@@ -106,7 +107,7 @@ def chord_generation(description: str, chord_num: int = 4) -> str:
     response = openai.Completion.create(
         model="text-davinci-003",
         prompt=openai_prompt,
-        temperature=0,
+        temperature=1,
         max_tokens=100,
         top_p=1,
         frequency_penalty=0.0,
@@ -114,4 +115,6 @@ def chord_generation(description: str, chord_num: int = 4) -> str:
         stop=["\n"]
     )
 
-    return response.choices[0].text
+    chord_list = [i.strip() for i in response.choices[0].text.split('-')]
+
+    return chord_list

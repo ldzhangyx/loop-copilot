@@ -49,6 +49,7 @@ class Text2MusicWithMelody(object):
     @prompts(
         name="Generate music from user input text with melody or track condition",
         description="useful if you want to generate, style transfer or remix music from a user input text with a given melody or track condition."
+                    "Unlike Accompaniment, this tool will also re-generate the given melody."
                     "like: remix the given melody with text description, or doing style transfer as text described with the given melody."
                     "The input to this tool should be a comma separated string of two, "
                     "representing the music_filename and the text description."
@@ -154,4 +155,38 @@ class SimpleTracksMixing(object):
         audio_write(updated_music_filename[:-4],
                     wav.cpu(), sr_1, strategy="loudness", loudness_compressor=True)
         print(f"\nProcessed TracksMixing, Output Music: {updated_music_filename}.")
+        return updated_music_filename
+
+
+class Accompaniment(object):
+    template_model = True
+    def __init__(self, device, Text2MusicWithMelody, ExtractTrack, SimpleTracksMixing):
+        print("Initializing Accompaniment")
+        self.device = device
+        self.Text2MusicWithMelody = Text2MusicWithMelody
+        self.ExtractTrack = ExtractTrack
+        self.SimpleTracksMixing = SimpleTracksMixing
+
+    @prompts(
+        name="Generate accompaniment music from user input text, keeping the given melody or track",
+        description="useful if you want to style transfer or remix music from a user input text with a given melody."
+                    "Unlike Text2MusicWithMelody, this tool will keep the given melody track instead of re-generate it."
+                    "Note that the user must assign a track (it must be one of `vocals`, `drums`, `bass`, `guitar`, `piano` or `other`) to keep."
+                    "like: keep the guitar track and remix the given music with text description, "
+                    "or generate accompaniment as text described with the given vocal track."
+                    "The input to this tool should be a comma separated string of three, "
+                    "representing the music_filename, track name, and the text description."
+    )
+
+    def inference(self, inputs):
+        music_filename, track_name, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip(), inputs.split(",")[2].strip()
+        print(f"Generating music from text with accompaniment condition, Input Text: {text}, Previous music: {music_filename}, Track: {track_name}.")
+        # separate the track
+        updated_main_track = self.ExtractTrack.inference(f"{music_filename}, {track_name}, extract")
+        # generate music
+        updated_new_music = self.Text2MusicWithMelody.inference(f"{text}, {updated_main_track}")
+        # remove the track in accompaniment
+        updated_accompaniment = self.ExtractTrack.inference(f"{updated_new_music}, {track_name}, remove")
+        # mix
+        updated_music_filename = self.SimpleTracksMixing.inference(f"{updated_main_track}, {updated_accompaniment}")
         return updated_music_filename
