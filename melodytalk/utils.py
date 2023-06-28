@@ -84,3 +84,34 @@ def description_to_attributes(description: str) -> str:
     )
 
     return response.choices[0].text
+
+
+def chord_generation(description: str, chord_num: int = 4) -> str:
+    """ This function is a trick to generate chord sequence from the description.
+
+    :param description:
+    :param chord_num:
+    :return:
+    """
+
+    openai_prompt = f"""Please generate a chord sequence consists of according to the text description. Example:
+
+    Q: Generate a chord sequence for sad pop song. 4 chords.
+    A:  Dm - Bb - F - C
+    
+    Q: {description}. {chord_num} chords.
+    A:
+    """
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+        stop=["\n"]
+    )
+
+    return response.choices[0].text
