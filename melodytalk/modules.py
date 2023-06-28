@@ -10,7 +10,7 @@ from audiocraft.data.audio import audio_write
 # source separation
 import demucs.separate
 
-from utils import prompts, get_new_audio_name
+from utils import prompts, get_new_audio_name, description_to_attributes, cut_dialogue_history
 
 
 # Initialze common models
@@ -32,7 +32,7 @@ class Text2Music(object):
 
     def inference(self, text):
         music_filename = os.path.join("music", f"{str(uuid.uuid4())[:8]}.wav")
-        prompt = text
+        text = description_to_attributes(text)  # convert text to attributes
         wav = self.model.generate([text], progress=False)
         wav = wav[0]  # batch size is 1
         audio_write(music_filename[:-4],
@@ -47,8 +47,8 @@ class Text2MusicWithMelody(object):
         self.model = musicgen_model
 
     @prompts(
-        name="Generate music from user input text with melody condition",
-        description="useful if you want to generate, style transfer or remix music from a user input text with a given melody condition."
+        name="Generate music from user input text with melody or track condition",
+        description="useful if you want to generate, style transfer or remix music from a user input text with a given melody or track condition."
                     "like: remix the given melody with text description, or doing style transfer as text described with the given melody."
                     "The input to this tool should be a comma separated string of two, "
                     "representing the music_filename and the text description."
@@ -56,6 +56,7 @@ class Text2MusicWithMelody(object):
 
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        text = description_to_attributes(text)  # convert text to attributes
         print(f"Generating music from text with melody condition, Input Text: {text}, Melody: {music_filename}.")
         updated_music_filename = get_new_audio_name(music_filename, func_name="remix")
         melody, sr = torchaudio.load(music_filename)
@@ -90,7 +91,7 @@ class ExtractTrack(object):
 
     def inference(self, inputs):
         music_filename, instrument, mode = inputs.split(",")[0].strip(), inputs.split(",")[1].strip(), inputs.split(",")[2].strip()
-        print(f"{mode}ing {instrument} track from {music_filename}.")
+        print(f"{mode} {instrument} track from {music_filename}.")
 
         if mode == "extract":
             instrument_mode = instrument

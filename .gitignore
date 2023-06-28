@@ -153,3 +153,5 @@ cython_debug/
 
 output/
 assets/
+
+.DS_Store
