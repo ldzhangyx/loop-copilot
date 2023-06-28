@@ -61,17 +61,17 @@ def description_to_attributes(description: str) -> str:
     :return:
     """
 
-    openai_prompt = f"""Please catch the bpm and key attributes from the original description text. If the description text does not mention it, do not add it. Here are two examples:
+    openai_prompt = f"""Please format the bpm and key attributes from the original description text and keep the rest unchanged. 
+    If the description text does not mention it, do not add it. Here are two examples:
 
     Q: Generate a love pop song in C major of 120 bpm.
     A: Generate a love pop song. bpm: 120. key: Cmaj. 
     
-    Q: Generate a love pop song in a minor.
-    A:  Generate a love pop song. key: Amin. 
+    Q: love pop song in a minor, creating a romantic atmosphere.
+    A: love pop song, creating a romantic atmosphere. key: Amin. 
     
     Q: {description}.
-    A: 
-    """
+    A: """
 
     response = openai.Completion.create(
       model="text-davinci-003",
@@ -81,7 +81,6 @@ def description_to_attributes(description: str) -> str:
       top_p=1,
       frequency_penalty=0.0,
       presence_penalty=0.0,
-      stop=["\n"]
     )
 
     return response.choices[0].text
@@ -101,8 +100,7 @@ def chord_generation(description: str, chord_num: int = 4) -> tp.List:
     A: Dm - Bb - F - C
     
     Q: {description}. {chord_num} chords.
-    A:
-    """
+    A: """
 
     response = openai.Completion.create(
         model="text-davinci-003",
@@ -112,7 +110,6 @@ def chord_generation(description: str, chord_num: int = 4) -> tp.List:
         top_p=1,
         frequency_penalty=0.0,
         presence_penalty=0.0,
-        stop=["\n"]
     )
 
     chord_list = [i.strip() for i in response.choices[0].text.split('-')]

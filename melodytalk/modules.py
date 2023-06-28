@@ -160,9 +160,8 @@ class SimpleTracksMixing(object):
 
 class Accompaniment(object):
     template_model = True
-    def __init__(self, device, Text2MusicWithMelody, ExtractTrack, SimpleTracksMixing):
+    def __init__(self, Text2MusicWithMelody, ExtractTrack, SimpleTracksMixing):
         print("Initializing Accompaniment")
-        self.device = device
         self.Text2MusicWithMelody = Text2MusicWithMelody
         self.ExtractTrack = ExtractTrack
         self.SimpleTracksMixing = SimpleTracksMixing

@@ -126,10 +126,11 @@ Thought: Do I need to use a tool? {agent_scratchpad}
 
 
 class ConversationBot(object):
-    def __init__(self, load_dict):
-        print(f"Initializing MelodyTalk, load_dict={load_dict}")
-        if 'Text2Music' not in load_dict:
-            raise ValueError("You have to load Text2Music as a basic function for MelodyTalk.")
+    def __init__(self):
+        load_dict = {"Text2Music":"cuda:0", "ExtractTrack":"cuda:0", "Text2MusicWithMelody":"cuda:0", "SimpleTracksMixing":"cuda:0"}
+        template_dict = {"Accompaniment": "cuda:0"}
+
+        print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
 
         self.models = {}
         # Load Basic Foundation Models
@@ -137,14 +138,13 @@ class ConversationBot(object):
             self.models[class_name] = globals()[class_name](device=device)
 
         # Load Template Foundation Models
-        for class_name, module in globals().items():
-            if getattr(module, 'template_model', False):
-                template_required_names = {k for k in inspect.signature(module.__init__).parameters.keys() if
-                                           k != 'self'}
-                loaded_names = set([type(e).__name__ for e in self.models.values()])
-                if template_required_names.issubset(loaded_names):
-                    self.models[class_name] = globals()[class_name](
-                        **{name: self.models[name] for name in template_required_names})
+        for class_name, device in template_dict.items():
+            template_required_names = {k for k in inspect.signature(globals()[class_name].__init__).parameters.keys() if
+                                       k != 'self'}
+            loaded_names = set([type(e).__name__ for e in self.models.values()])
+            if template_required_names.issubset(loaded_names):
+                self.models[class_name] = globals()[class_name](
+                    **{name: self.models[name] for name in template_required_names})
 
         print(f"All the Available Functions: {self.models}")
 
@@ -225,14 +225,7 @@ class ConversationBot(object):
 if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
         os.mkdir("checkpoints")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--load', type=str, default="Text2Music_cuda:0, "
-                                                    "ExtractTrack_cuda:0, "
-                                                    "Text2MusicWithMelody_cuda:0,"
-                                                    "SimpleTracksMixing_cuda:0")
-    args = parser.parse_args()
-    load_dict = {e.split('_')[0].strip(): e.split('_')[1].strip() for e in args.load.split(',')}
-    bot = ConversationBot(load_dict=load_dict)
+    bot = ConversationBot()
     with gr.Blocks(css="#chatbot .overflow-y-auto{height:500px}") as demo:
         lang = gr.Radio(choices = ['Chinese','English'], value=None, label='Language')
         chatbot = gr.Chatbot(elem_id="chatbot", label="MelodyTalk")
