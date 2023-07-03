@@ -61,14 +61,18 @@ def description_to_attributes(description: str) -> str:
     :return:
     """
 
-    openai_prompt = f"""Please format the bpm and key attributes from the original description text and keep the rest unchanged. 
-    If the description text does not mention it, do not add it. Here are two examples:
+    openai_prompt = f"""Please: 1. split and paste the bpm and key attributes from the original description text; 
+    copy and paste the instrument attribute but leave the original text; delete the chord description if necessary. keep the rest unchanged. 
+    If the description text does not mention it, do not add it. Here are some examples:
 
-    Q: Generate a love pop song in C major of 120 bpm.
-    A: Generate a love pop song. bpm: 120. key: Cmaj. 
+    Q: Generate a love pop song with piano and violin in C major of 120 bpm.
+    A: Generate a love pop song with piano and violin. bpm: 120. key: C major. instrument: piano, violin.
     
-    Q: love pop song in a minor, creating a romantic atmosphere.
-    A: love pop song, creating a romantic atmosphere. key: Amin. 
+    Q: love pop song in A minor, creating a romantic atmosphere.
+    A: love pop song, creating a romantic atmosphere. key: A minor. 
+    
+    Q: Generate a pop song with chord progression of C - G - Am - F, with piano and guitar.
+    A: Generate a pop song with piano and guitar. instrument: piano, guitar.
     
     Q: {description}.
     A: """
@@ -86,7 +90,7 @@ def description_to_attributes(description: str) -> str:
     return response.choices[0].text
 
 
-def chord_generation(description: str, chord_num: int = 4) -> tp.List:
+def chord_generation(description: str) -> tp.List:
     """ This function is a trick to generate chord sequence from the description.
 
     :param description:
@@ -94,12 +98,17 @@ def chord_generation(description: str, chord_num: int = 4) -> tp.List:
     :return:
     """
 
-    openai_prompt = f"""Please generate a chord sequence consists of according to the text description. Example:
+    openai_prompt = f"""Please analyse and generate a chord sequence (4 chords by default) according to the text description. Example:
 
-    Q: Generate a chord sequence for sad pop song. 4 chords.
-    A: Dm - Bb - F - C
+    # random generate chord sequence
+    Q: Generate a song which has a jazz chord progression, with piano and guitar. 
+    A: D minor - Bb major - F major - C major
     
-    Q: {description}. {chord_num} chords.
+    # formalize chord description
+    Q: Generate a pop song which has a chord progression of I - IV - V - I, with piano and guitar. 
+    A: C major - F major - G major - C major
+    
+    Q: {description}
     A: """
 
     response = openai.Completion.create(
@@ -112,6 +121,6 @@ def chord_generation(description: str, chord_num: int = 4) -> tp.List:
         presence_penalty=0.0,
     )
 
-    chord_list = [i.strip() for i in response.choices[0].text.split('-')]
+    chord_list = [i.strip() for i in response.choices[0].text.split(' - ')]
 
     return chord_list

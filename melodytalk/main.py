@@ -71,7 +71,7 @@ Previous conversation history:
 Since MelodyTalk is a text language model, MelodyTalk must use tools to observe music rather than imagination. The thoughts and observations are only visible for MelodyTalk.
 
 New input: {input}
-Thought: Do I need to use a tool? {agent_scratchpad} Let's think step by step.
+Thought: Do I need to use a tool? {agent_scratchpad} You MUST strictly follow the format.
 """
 
 # removed from melodytalk_suffix:
@@ -128,7 +128,7 @@ Thought: Do I need to use a tool? {agent_scratchpad}
 class ConversationBot(object):
     def __init__(self):
         load_dict = {"Text2Music":"cuda:0", "ExtractTrack":"cuda:0", "Text2MusicWithMelody":"cuda:0", "SimpleTracksMixing":"cuda:0"}
-        template_dict = {"Accompaniment": "cuda:0"}
+        template_dict = { "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
 
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
 
@@ -188,8 +188,8 @@ class ConversationBot(object):
         if len(res['intermediate_steps']) > 0:
             audio_filename = res['intermediate_steps'][-1][1]
             state = state + [(None,(audio_filename,))]
-        print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
-              f"Current Memory: {self.agent.memory.buffer}")
+        # print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
+        #       f"Current Memory: {self.agent.memory.buffer}")
         return state, state
 
     def run_audio(self, file, state, txt, lang):
@@ -211,8 +211,8 @@ class ConversationBot(object):
         self.agent.memory.chat_memory.add_user_message(Human_prompt)
         self.agent.memory.chat_memory.add_ai_message(AI_prompt)
         state = state + [((music_filename,), AI_prompt)]
-        print(f"\nProcessed run_audio, Input music: {music_filename}\nCurrent state: {state}\n"
-              f"Current Memory: {self.agent.memory.buffer}")
+        # print(f"\nProcessed run_audio, Input music: {music_filename}\nCurrent state: {state}\n"
+        #       f"Current Memory: {self.agent.memory.buffer}")
         return state, state
 
     def run_recording(self, file_path, state, txt, lang):

@@ -10,12 +10,16 @@ from audiocraft.data.audio import audio_write
 # source separation
 import demucs.separate
 
-from utils import prompts, get_new_audio_name, description_to_attributes, cut_dialogue_history
+from utils import *
 
+DURATION = 12
 
 # Initialze common models
-musicgen_model = MusicGen.get_pretrained('melody')
-musicgen_model.set_generation_params(duration=8)
+musicgen_model = MusicGen.get_pretrained('large')
+musicgen_model.set_generation_params(duration=DURATION)
+
+musicgen_model_melody = MusicGen.get_pretrained('melody')
+musicgen_model_melody.set_generation_params(duration=DURATION)
 
 class Text2Music(object):
     def __init__(self, device):
@@ -44,12 +48,13 @@ class Text2MusicWithMelody(object):
     def __init__(self, device):
         print("Initializing Text2MusicWithMelody")
         self.device = device
-        self.model = musicgen_model
+        self.model = musicgen_model_melody
 
     @prompts(
-        name="Generate music from user input text with melody or track condition",
+        name="Generate music from user input text with given melody or track condition",
         description="useful if you want to generate, style transfer or remix music from a user input text with a given melody or track condition."
                     "Unlike Accompaniment, this tool will also re-generate the given melody."
+                    "You shall not use it when no previous music file in the history."
                     "like: remix the given melody with text description, or doing style transfer as text described with the given melody."
                     "The input to this tool should be a comma separated string of two, "
                     "representing the music_filename and the text description."
@@ -150,13 +155,61 @@ class SimpleTracksMixing(object):
             wav_2 = wav_2[:, :wav_1.shape[-1]]
         # mix
         assert wav_1.shape == wav_2.shape  # channel, length
-        wav = torch.add(wav_1, wav_2)
+        wav = torch.add(wav_1, wav_2 * 0.7)
         # write
         audio_write(updated_music_filename[:-4],
                     wav.cpu(), sr_1, strategy="loudness", loudness_compressor=True)
         print(f"\nProcessed TracksMixing, Output Music: {updated_music_filename}.")
         return updated_music_filename
 
+
+class MusicCaptioning(object):
+    def __init__(self):
+        raise NotImplementedError
+
+class Text2MusicwithChord(object):
+    template_model = True
+    def __init__(self, Text2Music):
+        print("Initializing Text2MusicwithChord")
+        self.Text2Music = Text2Music
+
+    @prompts(
+        name="Generate music from user input text and chord description",
+        description="useful only if you want to generate music from a user input text and explicitly mention a chord description."
+                    "Like: generate a pop love song with piano and a chord progression of C - F - G - C, or generate a sad music with a jazz chord progression."
+                    "This tool will automatically extract chord information and generate music."
+                    "The input to this tool should be the user input text. "
+    )
+
+    def inference(self, inputs):
+        music_filename = os.path.join("music", f"{str(uuid.uuid4())[:8]}.wav")
+
+        chords_list = chord_generation(inputs)
+        preprocessed_input = description_to_attributes(inputs)
+
+        for i, chord in enumerate(chords_list):
+            text = f"{preprocessed_input} key: {chord}."
+            self.Text2Music.model.set_generation_params(duration=(i + 1) * (DURATION / len(chords_list)))
+            if i == 0:
+                wav = self.Text2Music.model.generate([text], progress=False)
+            else:
+                wav = self.Text2Music.model.generate_continuation(wav,
+                                                                  self.Text2Music.model.sample_rate,
+                                                                  [text],
+                                                                  progress=False)
+                if i == len(chords_list) - 1:
+                    wav = wav[0]  # batch size is 1
+                    audio_write(music_filename[:-4],
+                                wav.cpu(), self.Text2Music.model.sample_rate, strategy="loudness", loudness_compressor=True)
+        self.Text2Music.model.set_generation_params(duration=DURATION)
+        print(f"\nProcessed Text2Music, Input Text: {preprocessed_input}, Output Music: {music_filename}.")
+        return music_filename
+
+
+
+class MusicInpainting(object):
+    def __init__(self):
+        raise NotImplementedError
 
 class Accompaniment(object):
     template_model = True
@@ -183,7 +236,7 @@ class Accompaniment(object):
         # separate the track
         updated_main_track = self.ExtractTrack.inference(f"{music_filename}, {track_name}, extract")
         # generate music
-        updated_new_music = self.Text2MusicWithMelody.inference(f"{text}, {updated_main_track}")
+        updated_new_music = self.Text2MusicWithMelody.inference(f"{updated_main_track}, {text}")
         # remove the track in accompaniment
         updated_accompaniment = self.ExtractTrack.inference(f"{updated_new_music}, {track_name}, remove")
         # mix
