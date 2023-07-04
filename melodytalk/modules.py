@@ -3,6 +3,8 @@ import uuid
 import torch
 from shutil import copyfile
 import torchaudio
+from dataclasses import dataclass
+import typing as tp
 
 # text2music
 from audiocraft.models import MusicGen
@@ -12,7 +14,7 @@ import demucs.separate
 
 from utils import *
 
-DURATION = 12
+DURATION = 15
 
 # Initialze common models
 musicgen_model = MusicGen.get_pretrained('large')
@@ -20,6 +22,22 @@ musicgen_model.set_generation_params(duration=DURATION)
 
 musicgen_model_melody = MusicGen.get_pretrained('melody')
 musicgen_model_melody.set_generation_params(duration=DURATION)
+
+
+@dataclass
+class GlobalAttributes(object):
+    # metadata
+    key: str = None
+    bpm: int = None
+    genre: str = None
+    mood: str = None
+    instrument: str = None
+    # text description cache
+    description: str = None
+    # tracks cache
+    mix: torch.Tensor = None
+    stems: tp.Dict[str, torch.Tensor] = None
+
 
 class Text2Music(object):
     def __init__(self, device):

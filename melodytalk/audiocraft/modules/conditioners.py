@@ -527,7 +527,7 @@ class ChromaStemConditioner(WaveformConditioner):
         # avoid 0-size tensors when we are working with null conds
         if wav.shape[-1] == 1:
             return self.chroma(wav)
-        # stems = self._get_filtered_wav(wav)
+        stems = self._get_filtered_wav(wav)
         stems = wav
         chroma = self.chroma(stems)
 

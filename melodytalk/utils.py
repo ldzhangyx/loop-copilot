@@ -5,6 +5,7 @@ import numpy as np
 import os
 import openai
 import typing as tp
+import madmom
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
