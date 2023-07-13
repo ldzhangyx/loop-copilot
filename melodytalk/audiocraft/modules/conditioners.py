@@ -528,7 +528,6 @@ class ChromaStemConditioner(WaveformConditioner):
         if wav.shape[-1] == 1:
             return self.chroma(wav)
         stems = self._get_filtered_wav(wav)
-        stems = wav
         chroma = self.chroma(stems)
 
         if self.match_len_on_eval:

@@ -29,8 +29,8 @@ class GlobalAttributes(object):
     # metadata
     key: str = None
     bpm: int = None
-    genre: str = None
-    mood: str = None
+    # genre: str = None
+    # mood: str = None
     instrument: str = None
     # text description cache
     description: str = None

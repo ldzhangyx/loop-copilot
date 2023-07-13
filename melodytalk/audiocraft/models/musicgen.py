@@ -196,7 +196,7 @@ class MusicGen:
 
     def generate_continuation(self, prompt: torch.Tensor, prompt_sample_rate: int,
                               descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
-                              progress: bool = False) -> torch.Tensor:
+                              progress: bool = False, high_pass_filter: bool = True) -> torch.Tensor:
         """Generate samples conditioned on audio prompts.
 
         Args:
@@ -205,6 +205,7 @@ class MusicGen:
             prompt_sample_rate (int): Sampling rate of the given audio waveforms.
             descriptions (tp.List[str], optional): A list of strings used as text conditioning. Defaults to None.
             progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+            high_pass_filter (bool, optional): Whether to apply a high-pass filter to the prompt. Defaults to True.
         """
         if prompt.dim() == 2:
             prompt = prompt[None]
@@ -213,7 +214,7 @@ class MusicGen:
         prompt = convert_audio(prompt, prompt_sample_rate, self.sample_rate, self.audio_channels)
         if descriptions is None:
             descriptions = [None] * len(prompt)
-        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
+        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt, high_pass_filter=high_pass_filter)
         assert prompt_tokens is not None
         return self._generate_tokens(attributes, prompt_tokens, progress)
 
@@ -223,6 +224,7 @@ class MusicGen:
             descriptions: tp.Sequence[tp.Optional[str]],
             prompt: tp.Optional[torch.Tensor],
             melody_wavs: tp.Optional[MelodyList] = None,
+            high_pass_filter: bool = True
     ) -> tp.Tuple[tp.List[ConditioningAttributes], tp.Optional[torch.Tensor]]:
         """Prepare model inputs.
 
@@ -231,6 +233,7 @@ class MusicGen:
             prompt (torch.Tensor): A batch of waveforms used for continuation.
             melody_wavs (tp.Optional[torch.Tensor], optional): A batch of waveforms
                 used as melody conditioning. Defaults to None.
+            high_pass_filter (bool, optional): Whether to apply a high-pass filter to the prompt. Defaults to True.
         """
         attributes = [
             ConditioningAttributes(text={'description': description})

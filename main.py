@@ -1,34 +1,50 @@
+import os
+
 import torchaudio
-from audiocraft.models import MusicGen
-from audiocraft.data.audio import audio_write
+from melodytalk.audiocraft.models import MusicGen
+from melodytalk.audiocraft.data.audio import audio_write
 from datetime import datetime
+import torch
 
 MODEL_NAME = 'melody'
-DURATION = 8
+DURATION = 40
 CFG_COEF = 3
 SAMPLES = 5
-PROMPT = 'love pop song with violin, piano arrangement, creating a romantic atmosphere'
+# PROMPT = 'music loop. Passionate love song with guitar rhythms, electric piano chords, drums pattern. instrument: guitar, piano, drum.'
+PROMPT = "rock music loop with saxophone solo. bpm: 90. instrument: saxophone, guitar, drum."
+melody_conditioned = True
 
-melody_conditioned = False
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-model = MusicGen.get_pretrained(MODEL_NAME)
+model = MusicGen.get_pretrained(MODEL_NAME, device='cuda')
 
+DURATION_1 = min(DURATION, 30)
+DURATION_2 = max(DURATION - 30, 0)
+OVERLAP = 8
 
-model.set_generation_params(duration=DURATION,
-                            cfg_coef=CFG_COEF)  # generate 8 seconds.
+model.set_generation_params(duration=DURATION_1,
+                            cfg_coef=CFG_COEF,)  # generate 8 seconds.
 # wav = model.generate_unconditional(4)    # generates 4 unconditional audio samples
 descriptions = [PROMPT] * SAMPLES
                 # 'A slow and heartbreaking love song at tempo of 60',
                 # 'A slow and heartbreaking love song with cello instrument']
 
-if not melody_conditioned:
-    wav = model.generate(descriptions, progress=True)  # generates 3 samples.
-else:
-    melody, sr = torchaudio.load('/home/intern-2023-02/melodytalk/assets/1625.wav')
-    wav = model.generate_with_chroma(descriptions, melody[None].expand(SAMPLES, -1, -1), sr, progress=True)
+def generate():
+    if not melody_conditioned:
+        wav = model.generate(descriptions, progress=True)  # generates 3 samples.
+    else:
+        melody, sr = torchaudio.load('/home/intern-2023-02/melodytalk/assets/20230705-155518_3.wav')
+        wav = model.generate_continuation(melody[None].expand(SAMPLES, -1, -1), sr, descriptions, progress=True)
+        if DURATION_2 > 0:
+            wav_ = wav[:, :, -OVERLAP * model.sample_rate:]
+            model.set_generation_params(duration=(OVERLAP + DURATION_2))
+            wav_2 = model.generate_continuation(wav_, model.sample_rate, descriptions, progress=True)[..., OVERLAP * model.sample_rate:]
+            wav = torch.cat([wav, wav_2], dim=-1)
 
-for idx, one_wav in enumerate(wav):
-    # Will save under {idx}.wav, with loudness normalization at -14 db LUFS.
-    current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-    audio_write(f'output/{current_time}_{idx}',
-                one_wav.cpu(), model.sample_rate, strategy="loudness", loudness_compressor=True)
+    for idx, one_wav in enumerate(wav):
+        # Will save under {idx}.wav, with loudness normalization at -14 db LUFS.
+        current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+        audio_write(f'output/{current_time}_{idx}',
+                    one_wav.cpu(), model.sample_rate, strategy="loudness", loudness_compressor=True)
+
+generate()

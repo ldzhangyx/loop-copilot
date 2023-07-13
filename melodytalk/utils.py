@@ -6,6 +6,8 @@ import os
 import openai
 import typing as tp
 import madmom
+import torchaudio
+from pydub import AudioSegment
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -125,3 +127,23 @@ def chord_generation(description: str) -> tp.List:
     chord_list = [i.strip() for i in response.choices[0].text.split(' - ')]
 
     return chord_list
+
+def beat_tracking_with_clip(audio_path: str,
+                            output_path: str=None,
+                            offset: int=0,
+                            bar: int=4,
+                            beat_per_bar: int=4,):
+    proc = madmom.features.beats.DBNDownBeatTrackingProcessor(beats_per_bar=beat_per_bar, fps=100)
+    beats = proc(audio_path)
+    # we cut the audio to only bar * beat_per_bar beats, and shift the first beat to offset
+    first_beat_time = beats[0][0]
+    last_beat_time = beats[bar * beat_per_bar][0]  # the beginning of the next bar
+    begin_time_with_offset = first_beat_time + offset
+    end_time = last_beat_time + offset
+    # cut the audio clip
+    audio = AudioSegment.from_wav(audio_path)
+    audio_clip = audio[begin_time_with_offset * 1000: end_time * 1000]
+    if output_path is None:
+        output_path = audio_path
+    audio_clip.export(output_path, format="wav")
+

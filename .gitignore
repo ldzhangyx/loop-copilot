@@ -153,5 +153,6 @@ cython_debug/
 
 output/
 assets/
+melodytalk/music/
 
 .DS_Store
