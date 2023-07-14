@@ -149,6 +149,9 @@ def beat_tracking_with_clip(audio_path: str,
     audio_clip.export(output_path, format="wav")
 
 
+def split_track_with_beat(input_track):
+    pass
+
 @torch.no_grad()
 def CLAP_post_filter(clap_model,
                      text_description: str,
@@ -175,7 +178,7 @@ def CLAP_post_filter(clap_model,
     # resample the audio_candidates to 48k which supports CLAP model
     audio_candidates = resampy.resample(audio_candidates.numpy(), audio_sr, 48000, axis=-1)
     audio_candidates = torch.from_numpy(audio_candidates)
-    # calculate thte audio embedding
+    # calculate the audio embedding
     audio_embedding = clap_model.get_audio_embedding_from_data(x=audio_candidates, use_tensor=True)  # (N, D)
     # calculate the text embedding
     text_embedding = clap_model.get_text_embedding([text_description])  #  (1, D)
