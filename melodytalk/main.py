@@ -127,8 +127,8 @@ Thought: Do I need to use a tool? {agent_scratchpad}
 
 class ConversationBot(object):
     def __init__(self):
-        load_dict = {"Text2Music":"cuda:0", "ExtractTrack":"cuda:0", "Text2MusicWithMelody":"cuda:0", "SimpleTracksMixing":"cuda:0"}
-        template_dict = { "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
+        load_dict = {"Text2Music":"cuda:0", "ExtractTrack":"cuda:0", "Text2MusicWithMelody":"cuda:0", "Text2MusicWithDrum":"cuda:0"}
+        template_dict = None #{ "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
 
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
 
@@ -138,13 +138,13 @@ class ConversationBot(object):
             self.models[class_name] = globals()[class_name](device=device)
 
         # Load Template Foundation Models
-        for class_name, device in template_dict.items():
-            template_required_names = {k for k in inspect.signature(globals()[class_name].__init__).parameters.keys() if
-                                       k != 'self'}
-            loaded_names = set([type(e).__name__ for e in self.models.values()])
-            if template_required_names.issubset(loaded_names):
-                self.models[class_name] = globals()[class_name](
-                    **{name: self.models[name] for name in template_required_names})
+        # for class_name, device in template_dict.items():
+        #     template_required_names = {k for k in inspect.signature(globals()[class_name].__init__).parameters.keys() if
+        #                                k != 'self'}
+        #     loaded_names = set([type(e).__name__ for e in self.models.values()])
+        #     if template_required_names.issubset(loaded_names):
+        #         self.models[class_name] = globals()[class_name](
+        #             **{name: self.models[name] for name in template_required_names})
 
         print(f"All the Available Functions: {self.models}")
 

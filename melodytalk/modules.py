@@ -16,7 +16,7 @@ import laion_clap
 
 from utils import *
 
-DURATION = 15
+DURATION = 6
 GENERATION_CANDIDATE = 5
 
 # Initialze common models
@@ -107,9 +107,10 @@ class Text2MusicWithDrum(object):
         self.model = musicgen_model_melody
 
     @prompts(
-        name="Generate music from user input text with given drum pattern",
-        description="useful if you want to generate music from a user input text with a given drum pattern."
-                    "like: generate of pop song, and following the drum pattern above."
+        name="Generate music from user input text based on the drum audio file provided.",
+        description="useful if you want to generate music from a user input text and a previous given drum pattern."
+                    "Do not use it when no previous music file (generated of uploaded) in the history."
+                    "like: generate a pop song based on the provided drum pattern above."
                     "The input to this tool should be a comma separated string of two, "
                     "representing the music_filename and the text description."
     )
@@ -136,7 +137,40 @@ class Text2MusicWithDrum(object):
         return updated_music_filename
 
 
+class AddNewTrack(object):
+    def __init__(self, device):
+        print("Initializing AddNewTrack")
+        self.device = device
+        self.model = musicgen_model_melody
 
+    @prompts(
+        name="Add a new track to the given music loop",
+        description="useful if you want to add a new track (usually add a new instrument) to the given music."
+                    "like: add a saxophone to the given music, or add piano arrangement to the given music."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the music_filename and the text description."
+    )
+
+    def inference(self, inputs):
+        music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        text = description_to_attributes(text)
+        print(f"Generating music from text with drum condition, Input Text: {text}, Drum: {music_filename}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="with_drum")
+        drum, sr = torchaudio.load(music_filename)
+        self.model.set_generation_params(duration=30)
+        wav = self.model.generate_continuation(prompt=drum[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
+                                               descriptions=[text] * GENERATION_CANDIDATE, progress=False)
+        self.model.set_generation_params(duration=DURATION)
+        # cut drum prompt
+        wav = wav[:, drum.shape[1]:drum.shape[1] + DURATION * sr]
+        # TODO: split tracks by beats
+
+        # select the best one by CLAP scores
+        best_wav, _ = CLAP_post_filter(CLAP_model, text, wav, self.model.sample_rate)
+        audio_write(updated_music_filename[:-4],
+                    best_wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed Text2MusicWithDrum, Output Music: {updated_music_filename}.")
+        return updated_music_filename
 
 
 class ExtractTrack(object):
