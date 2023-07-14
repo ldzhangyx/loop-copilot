@@ -6,6 +6,7 @@ import os
 import openai
 import typing as tp
 import madmom
+import resampy
 import torchaudio
 from pydub import AudioSegment
 
@@ -146,4 +147,44 @@ def beat_tracking_with_clip(audio_path: str,
     if output_path is None:
         output_path = audio_path
     audio_clip.export(output_path, format="wav")
+
+
+@torch.no_grad()
+def CLAP_post_filter(clap_model,
+                     text_description: str,
+                     audio_candidates: tp.List[torch.Tensor] or torch.Tensor,
+                     audio_sr: int) \
+        -> torch.Tensor and int:
+    """ This function is a post filter for CLAP model. It takes the text description and audio candidates as input,
+    and returns the most similar audio and its similarity score.
+
+    args:
+        clap_model: CLAP model
+        text_description: the text description of the audio
+        audio_candidates: the audio candidates
+        audio_sr: the sample rate of the audio candidates
+
+    return:
+        audio_embedding: the embedding of the audio candidates
+        similarity: the similarity score
+    """
+
+    # transform the audio_candidates to torch.Tensor with shape (N, L)
+    if isinstance(audio_candidates, list):
+        audio_candidates = torch.stack(audio_candidates)
+    # resample the audio_candidates to 48k which supports CLAP model
+    audio_candidates = resampy.resample(audio_candidates.numpy(), audio_sr, 48000, axis=-1)
+    audio_candidates = torch.from_numpy(audio_candidates)
+    # calculate thte audio embedding
+    audio_embedding = clap_model.get_audio_embedding_from_data(x=audio_candidates, use_tensor=True)  # (N, D)
+    # calculate the text embedding
+    text_embedding = clap_model.get_text_embedding([text_description])  #  (1, D)
+    # calculate the similarity by dot product
+    similarity = torch.matmul(text_embedding, audio_embedding.T)  # (1, N)
+    # get the index of the most similar audio
+    index = torch.argmax(similarity)
+    # return
+    return audio_candidates[index], similarity[index]
+
+
 

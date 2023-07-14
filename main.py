@@ -9,9 +9,9 @@ import torch
 MODEL_NAME = 'melody'
 DURATION = 40
 CFG_COEF = 3
-SAMPLES = 5
+SAMPLES = 10
 # PROMPT = 'music loop. Passionate love song with guitar rhythms, electric piano chords, drums pattern. instrument: guitar, piano, drum.'
-PROMPT = "rock music loop with saxophone solo. bpm: 90. instrument: saxophone, guitar, drum."
+PROMPT = "rock music loop with rhythmic, quick and technic saxophone solo. bpm: 90. instrument: saxophone, guitar, drum."
 melody_conditioned = True
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"

@@ -11,18 +11,26 @@ from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 # source separation
 import demucs.separate
+# CLAP
+import laion_clap
 
 from utils import *
 
 DURATION = 15
 
 # Initialze common models
-musicgen_model = MusicGen.get_pretrained('large')
-musicgen_model.set_generation_params(duration=DURATION)
+# musicgen_model = MusicGen.get_pretrained('large')
+# musicgen_model.set_generation_params(duration=DURATION)
 
 musicgen_model_melody = MusicGen.get_pretrained('melody')
 musicgen_model_melody.set_generation_params(duration=DURATION)
 
+# for acceration
+musicgen_model = musicgen_model_melody
+
+# Intialize CLIP post filter
+CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", tmodel="roberta", device="cuda")
+CLAP_model.load_ckpt("/home/intern-2023-02/melodytalk/melodytalk/pretrained/music_audioset_epoch_15_esc_90.14.pt")
 
 @dataclass
 class GlobalAttributes(object):
