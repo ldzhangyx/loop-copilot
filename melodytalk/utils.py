@@ -70,13 +70,13 @@ def description_to_attributes(description: str) -> str:
     If the description text does not mention it, do not add it. Here are some examples:
 
     Q: Generate a love pop song with piano and violin in C major of 120 bpm.
-    A: Generate a love pop song with piano and violin. bpm: 120. key: C major. instrument: piano, violin.
+    A: a love pop song with piano and violin. bpm: 120. key: C major. instrument: piano, violin.
     
     Q: love pop song in A minor, creating a romantic atmosphere.
     A: love pop song, creating a romantic atmosphere. key: A minor. 
     
     Q: Generate a pop song with chord progression of C - G - Am - F, with piano and guitar.
-    A: Generate a pop song with piano and guitar. instrument: piano, guitar.
+    A: a pop song with piano and guitar. instrument: piano, guitar.
     
     Q: {description}.
     A: """

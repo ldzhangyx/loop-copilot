@@ -133,6 +133,10 @@ class ConversationBot(object):
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
 
         self.models = {}
+
+        # global attribute table
+        self.attribute_table = GlobalAttributes()
+
         # Load Basic Foundation Models
         for class_name, device in load_dict.items():
             self.models[class_name] = globals()[class_name](device=device)

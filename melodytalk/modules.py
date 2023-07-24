@@ -6,6 +6,8 @@ import torchaudio
 from dataclasses import dataclass
 import typing as tp
 
+import openai
+
 # text2music
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
@@ -26,9 +28,6 @@ GENERATION_CANDIDATE = 5
 musicgen_model_melody = MusicGen.get_pretrained('melody')
 musicgen_model_melody.set_generation_params(duration=DURATION)
 
-# for acceration
-musicgen_model = musicgen_model_melody
-
 # Intialize CLIP post filter
 CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", tmodel="roberta", device="cuda")
 CLAP_model.load_ckpt("/home/intern-2023-02/melodytalk/melodytalk/pretrained/music_audioset_epoch_15_esc_90.14.pt")
@@ -40,13 +39,39 @@ class GlobalAttributes(object):
     bpm: int = None
     # genre: str = None
     # mood: str = None
-    instrument: str = None
+    instrument: tp.List[str] = None
     # text description cache
-    description: str = None
+    descriptions: str = None
     # tracks cache
     mix: torch.Tensor = None
     stems: tp.Dict[str, torch.Tensor] = None
 
+    def __post_init__(self):
+        self.instrument = []
+        self.stems = {}
+
+    def update_attributes_from_description(self, description=None):
+        attributes_list = description.split('.')[1:]
+        for i, attribute in enumerate(attributes_list):
+            if "key:" in attribute:
+                self.key = attribute.split('key:')[-1].strip()
+            elif "bpm:" in attribute:
+                self.bpm = int(attribute.split('bpm:')[-1].strip())
+            elif "instrument:" in attribute:
+                self.instrument = attribute.split('instrument:')[-1].strip().split(',')
+
+    def description_to_attributes_wrapper(self, description: str) -> str:
+        formatted_description = description_to_attributes(description)
+        self.descriptions = formatted_description
+        if any([x in formatted_description for x in ["key:", "bpm:", "instrument:"]]):
+            self.update_attributes_from_description(formatted_description)
+        return formatted_description
+
+
+
+# attribute management
+attribute_table = GlobalAttributes()
+global attribute_table
 
 class Text2Music(object):
     def __init__(self, device):
@@ -78,9 +103,9 @@ class Text2MusicWithMelody(object):
         self.model = musicgen_model_melody
 
     @prompts(
-        name="Generate music from user input text with given melody or track condition",
-        description="useful if you want to generate, style transfer or remix music from a user input text with a given melody or track condition."
-                    "Unlike Accompaniment, this tool will also re-generate the given melody."
+        name="Generate music from user input text with given melody condition",
+        description="useful if you want to style transfer or remix music with a user input text describing the target style and the original music."
+                    "Please use Text2MusicWithDrum instead if the condition is a single drum track."
                     "You shall not use it when no previous music file in the history."
                     "like: remix the given melody with text description, or doing style transfer as text described with the given melody."
                     "The input to this tool should be a comma separated string of two, "
@@ -107,8 +132,8 @@ class Text2MusicWithDrum(object):
         self.model = musicgen_model_melody
 
     @prompts(
-        name="Generate music from user input text based on the drum audio file provided.",
-        description="useful if you want to generate music from a user input text and a previous given drum pattern."
+        name="Generate music from user input text based on the drum track provided.",
+        description="useful if you want to generate music from a user input text and a previous given drum track."
                     "Do not use it when no previous music file (generated of uploaded) in the history."
                     "like: generate a pop song based on the provided drum pattern above."
                     "The input to this tool should be a comma separated string of two, "
@@ -118,7 +143,7 @@ class Text2MusicWithDrum(object):
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
         text = description_to_attributes(text)
-        print(f"Generating music from text with drum condition, Input Text: {text}, Drum: {music_filename}.")
+        print(f"Generating music from text with drum condition, Input text: {text}, Drum: {music_filename}.")
         updated_music_filename = get_new_audio_name(music_filename, func_name="with_drum")
         drum, sr = torchaudio.load(music_filename)
         self.model.set_generation_params(duration=30)
@@ -154,15 +179,15 @@ class AddNewTrack(object):
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
         text = description_to_attributes(text)
-        print(f"Generating music from text with drum condition, Input Text: {text}, Drum: {music_filename}.")
-        updated_music_filename = get_new_audio_name(music_filename, func_name="with_drum")
-        drum, sr = torchaudio.load(music_filename)
+        print(f"Adding a new track, Input text: {text}, Previous track: {music_filename}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="add_track")
+        p_track, sr = torchaudio.load(music_filename)
         self.model.set_generation_params(duration=30)
-        wav = self.model.generate_continuation(prompt=drum[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
+        wav = self.model.generate_continuation(prompt=p_track[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
                                                descriptions=[text] * GENERATION_CANDIDATE, progress=False)
         self.model.set_generation_params(duration=DURATION)
         # cut drum prompt
-        wav = wav[:, drum.shape[1]:drum.shape[1] + DURATION * sr]
+        wav = wav[:, p_track.shape[1]:p_track.shape[1] + DURATION * sr]
         # TODO: split tracks by beats
 
         # select the best one by CLAP scores
