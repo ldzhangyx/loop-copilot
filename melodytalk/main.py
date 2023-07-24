@@ -1,16 +1,6 @@
 import gradio as gr
-import argparse
-import uuid
-import inspect
-import tempfile
-import numpy as np
-import torch
-import os
-import re
-import random
 
 # audio processing
-import torchaudio
 
 # langchain interface
 from langchain.agents.agent_types import AgentType
@@ -20,10 +10,7 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from langchain.llms.openai import OpenAI
 
 # MusicGen
-from audiocraft.models import MusicGen
-from audiocraft.data.audio import audio_write
 
-from utils import prompts, seed_everything, cut_dialogue_history, get_new_audio_name
 from modules import *
 
 

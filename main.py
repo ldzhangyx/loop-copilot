@@ -1,8 +1,8 @@
 import os
 
 import torchaudio
-from melodytalk.audiocraft.models import MusicGen
-from melodytalk.audiocraft.data.audio import audio_write
+from melodytalk.dependencies.audiocraft import MusicGen
+from melodytalk.dependencies.audiocraft.data.audio import audio_write
 from datetime import datetime
 import torch
 

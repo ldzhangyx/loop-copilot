@@ -1,20 +1,13 @@
-import os
-import uuid
-import torch
 from shutil import copyfile
-import torchaudio
 from dataclasses import dataclass
-import typing as tp
-
-import openai
 
 # text2music
-from audiocraft.models import MusicGen
-from audiocraft.data.audio import audio_write
+from melodytalk.dependencies.audiocraft.models import MusicGen
+from melodytalk.dependencies.audiocraft.data.audio import audio_write
 # source separation
 import demucs.separate
 # CLAP
-import laion_clap
+from melodytalk.dependencies import laion_clap
 
 from utils import *
 
@@ -29,7 +22,7 @@ musicgen_model_melody = MusicGen.get_pretrained('melody')
 musicgen_model_melody.set_generation_params(duration=DURATION)
 
 # Intialize CLIP post filter
-CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", tmodel="roberta", device="cuda")
+CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", device="cuda")
 CLAP_model.load_ckpt("/home/intern-2023-02/melodytalk/melodytalk/pretrained/music_audioset_epoch_15_esc_90.14.pt")
 
 @dataclass
@@ -70,8 +63,9 @@ class GlobalAttributes(object):
 
 
 # attribute management
-attribute_table = GlobalAttributes()
 global attribute_table
+attribute_table = GlobalAttributes()
+
 
 class Text2Music(object):
     def __init__(self, device):
