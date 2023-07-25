@@ -13,7 +13,6 @@ from langchain.llms.openai import OpenAI
 
 from modules import *
 
-
 MELODYTALK_PREFIX = """MelodyTalk is designed to be able to assist with a wide range of text and music related tasks, from answering simple questions to providing in-depth explanations and discussions on a wide range of topics. MelodyTalk is able to generate human-like text based on the input it receives, allowing it to engage in natural-sounding conversations and provide responses that are coherent and relevant to the topic at hand.
 
 MelodyTalk is able to process and understand large amounts of text and music. As a language model, MelodyTalk can not directly read music, but it has a list of tools to finish different music tasks. Each music will have a file name formed as "music/xxx.wav", and MelodyTalk can invoke different tools to indirectly understand music. When talking about music, MelodyTalk is very strict to the file name and will never fabricate nonexistent files. 
@@ -114,8 +113,12 @@ Thought: Do I need to use a tool? {agent_scratchpad}
 
 class ConversationBot(object):
     def __init__(self):
-        load_dict = {"Text2Music":"cuda:0", "ExtractTrack":"cuda:0", "Text2MusicWithMelody":"cuda:0", "Text2MusicWithDrum":"cuda:0"}
-        template_dict = None #{ "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
+        load_dict = {"Text2Music": "cuda:0",
+                     "ExtractTrack": "cuda:0",
+                     "Text2MusicWithMelody": "cuda:0",
+                     "Text2MusicWithDrum": "cuda:0",
+                     "AddNewTrack": "cuda:0"}
+        template_dict = None  # { "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
 
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
 
@@ -178,7 +181,7 @@ class ConversationBot(object):
         state = state + [(text, res['output'])]
         if len(res['intermediate_steps']) > 0:
             audio_filename = res['intermediate_steps'][-1][1]
-            state = state + [(None,(audio_filename,))]
+            state = state + [(None, (audio_filename,))]
         # print(f"\nProcessed run_text, Input text: {text}\nCurrent state: {state}\n"
         #       f"Current Memory: {self.agent.memory.buffer}")
         return state, state
@@ -213,12 +216,13 @@ class ConversationBot(object):
     def clear_input_audio(self):
         return gr.Audio.update(value=None)
 
+
 if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
         os.mkdir("checkpoints")
     bot = ConversationBot()
     with gr.Blocks(css="#chatbot .overflow-y-auto{height:500px}") as demo:
-        lang = gr.Radio(choices = ['Chinese','English'], value=None, label='Language')
+        lang = gr.Radio(choices=['Chinese', 'English'], value=None, label='Language')
         chatbot = gr.Chatbot(elem_id="chatbot", label="MelodyTalk")
         state = gr.State([])
         with gr.Row(visible=False) as input_raws:
@@ -228,11 +232,11 @@ if __name__ == '__main__':
             with gr.Column(scale=0.15, min_width=0):
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
-                btn = gr.UploadButton("Upload",file_types=["audio"])
+                btn = gr.UploadButton("Upload", file_types=["audio"])
 
         with gr.Row(visible=False) as record_raws:
             with gr.Column(scale=0.7):
-                rec_audio = gr.Audio(source='microphone', type='filepath', interactive=True)
+                rec_audio = gr.Audio(source='microphone', type='filepath', interactive=True, show_label=False)
             with gr.Column(scale=0.15, min_width=0):
                 rec_clear = gr.Button("Re-recording")
             with gr.Column(scale=0.15, min_width=0):

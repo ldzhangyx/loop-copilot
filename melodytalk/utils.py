@@ -12,6 +12,7 @@ from pydub import AudioSegment
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+
 def cut_dialogue_history(history_memory, keep_last_n_words=500):
     if history_memory is None or len(history_memory) == 0:
         return history_memory
@@ -26,6 +27,7 @@ def cut_dialogue_history(history_memory, keep_last_n_words=500):
         last_n_tokens -= len(paragraphs[0].split(' '))
         paragraphs = paragraphs[1:]
     return '\n' + '\n'.join(paragraphs)
+
 
 def seed_everything(seed):
     random.seed(seed)
@@ -43,7 +45,8 @@ def prompts(name, description):
 
     return decorator
 
-def get_new_audio_name(org_audio_name: str, func_name: str ="update") -> str:
+
+def get_new_audio_name(org_audio_name: str, func_name: str = "update") -> str:
     head_tail = os.path.split(org_audio_name)
     head = head_tail[0]
     tail = head_tail[1]
@@ -57,6 +60,7 @@ def get_new_audio_name(org_audio_name: str, func_name: str ="update") -> str:
     recent_prev_file_name = name_split[0]
     new_file_name = f'{this_new_uuid}_{func_name}_{recent_prev_file_name}_{most_org_file_name}.wav'
     return os.path.join(head, new_file_name)
+
 
 def description_to_attributes(description: str) -> str:
     """ This function is a trick to concate key, bpm, (genre, mood, instrument) information to the description.
@@ -82,13 +86,38 @@ def description_to_attributes(description: str) -> str:
     A: """
 
     response = openai.Completion.create(
-      model="text-davinci-003",
-      prompt=openai_prompt,
-      temperature=0,
-      max_tokens=100,
-      top_p=1,
-      frequency_penalty=0.0,
-      presence_penalty=0.0,
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+    )
+
+    return response.choices[0].text
+
+
+def addtrack_demand_to_description(description: str) -> str:
+    openai_prompt = f"""Please rewrite the sentence in the following format.
+
+    Q: Please add a saxophone track to this music.
+    A: music loop with saxophone track.
+
+    Q: add some woodwind arrangement.
+    A: music loop with woodwind arrangement.
+
+    Q: {description}.
+    A: """
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
     )
 
     return response.choices[0].text
@@ -129,11 +158,12 @@ def chord_generation(description: str) -> tp.List:
 
     return chord_list
 
+
 def beat_tracking_with_clip(audio_path: str,
-                            output_path: str=None,
-                            offset: int=0,
-                            bar: int=4,
-                            beat_per_bar: int=4,):
+                            output_path: str = None,
+                            offset: int = 0,
+                            bar: int = 4,
+                            beat_per_bar: int = 4, ):
     proc = madmom.features.beats.DBNDownBeatTrackingProcessor(beats_per_bar=beat_per_bar, fps=100)
     beats = proc(audio_path)
     # we cut the audio to only bar * beat_per_bar beats, and shift the first beat to offset
@@ -152,10 +182,11 @@ def beat_tracking_with_clip(audio_path: str,
 def split_track_with_beat(input_track):
     pass
 
+
 @torch.no_grad()
 def CLAP_post_filter(clap_model,
                      text_description: str,
-                     audio_candidates: tp.List[torch.Tensor] or torch.Tensor,
+                     audio_candidates: torch.Tensor,
                      audio_sr: int) \
         -> torch.Tensor and int:
     """ This function is a post filter for CLAP model. It takes the text description and audio candidates as input,
@@ -171,23 +202,53 @@ def CLAP_post_filter(clap_model,
         audio_embedding: the embedding of the audio candidates
         similarity: the similarity score
     """
-
-    # transform the audio_candidates to torch.Tensor with shape (N, L)
-    if isinstance(audio_candidates, list):
-        audio_candidates = torch.stack(audio_candidates)
+    # if audio will in shape [N, C, L], then make C axis average. Usually C = 1.
+    audio_candidates = torch.mean(audio_candidates, dim=1)
     # resample the audio_candidates to 48k which supports CLAP model
-    audio_candidates = resampy.resample(audio_candidates.numpy(), audio_sr, 48000, axis=-1)
+    audio_candidates = resampy.resample(audio_candidates.cpu().numpy(), audio_sr, 48000, axis=-1)
     audio_candidates = torch.from_numpy(audio_candidates)
     # calculate the audio embedding
     audio_embedding = clap_model.get_audio_embedding_from_data(x=audio_candidates, use_tensor=True)  # (N, D)
     # calculate the text embedding
-    text_embedding = clap_model.get_text_embedding([text_description])  #  (1, D)
+    text_embedding = clap_model.get_text_embedding([text_description] * audio_embedding.size(dim=0), use_tensor=True)  # (N, D)
     # calculate the similarity by dot product
-    similarity = torch.matmul(text_embedding, audio_embedding.T)  # (1, N)
+    similarity = torch.sum(audio_embedding * text_embedding, dim=-1) # (N,)
     # get the index of the most similar audio
     index = torch.argmax(similarity)
+    best = audio_candidates[index].view(1, -1)
+    best = resampy.resample(best.cpu().numpy(), 48000, audio_sr, axis=-1)
     # return
-    return audio_candidates[index], similarity[index]
+    return best, similarity[index]
+
+
+def split_audio_tensor_by_downbeats(input_audio_batch: torch.Tensor, sr: int = 36000,
+                                    return_stack: bool = True) -> torch.Tensor:
+    segments = []
+    bars = 4
+    act = madmom.features.downbeats.RNNDownBeatProcessor()
+    proc = madmom.features.downbeats.DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4], fps=100)
+    for i, input_audio in enumerate(input_audio_batch):
+        # save to temp file
+        temp_file_name = f'cache/temp_{i}.wav'
+        temp_file_path = os.path.join(os.getcwd(), temp_file_name)
+        torchaudio.save(temp_file_path, input_audio, sr)
+
+        # estimation
+        all_beats = proc(act(temp_file_path))
+        # split
+        upbeats = [i[0] for i in all_beats if i[1] == 1]
+        upbeats_index = [int(i * sr) for i in upbeats][::bars]
+        for j in range(len(upbeats_index) - 1):
+            segments.append(input_audio[..., upbeats_index[j]: upbeats_index[j + 1]])
+
+    if return_stack:
+        # pad
+        max_len = max([i.shape[-1] for i in segments])
+        segments = [torch.nn.functional.pad(i, (0, max_len - i.shape[-1])) for i in segments]
+        # stack
+        segments = torch.stack(segments)
+
+    return segments
 
 
 

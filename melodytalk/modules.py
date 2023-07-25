@@ -1,6 +1,8 @@
 from shutil import copyfile
 from dataclasses import dataclass
 
+import torch
+
 # text2music
 from melodytalk.dependencies.audiocraft.models import MusicGen
 from melodytalk.dependencies.audiocraft.data.audio import audio_write
@@ -18,8 +20,10 @@ GENERATION_CANDIDATE = 5
 # musicgen_model = MusicGen.get_pretrained('large')
 # musicgen_model.set_generation_params(duration=DURATION)
 
-musicgen_model_melody = MusicGen.get_pretrained('melody')
-musicgen_model_melody.set_generation_params(duration=DURATION)
+musicgen_model = MusicGen.get_pretrained('melody')
+musicgen_model.set_generation_params(duration=DURATION)
+
+# musicgen_model = torch.compile(musicgen_model)
 
 # Intialize CLIP post filter
 CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", device="cuda")
@@ -94,7 +98,7 @@ class Text2MusicWithMelody(object):
     def __init__(self, device):
         print("Initializing Text2MusicWithMelody")
         self.device = device
-        self.model = musicgen_model_melody
+        self.model = musicgen_model
 
     @prompts(
         name="Generate music from user input text with given melody condition",
@@ -123,11 +127,11 @@ class Text2MusicWithDrum(object):
     def __init__(self, device):
         print("Initializing Text2MusicWithDrum")
         self.device = device
-        self.model = musicgen_model_melody
+        self.model = musicgen_model
 
     @prompts(
-        name="Generate music from user input text based on the drum track provided.",
-        description="useful if you want to generate music from a user input text and a previous given drum track."
+        name="Generate music from user input text based on the drum audio file provided.",
+        description="useful if you want to generate music from a user input text and a previous given drum audio file."
                     "Do not use it when no previous music file (generated of uploaded) in the history."
                     "like: generate a pop song based on the provided drum pattern above."
                     "The input to this tool should be a comma separated string of two, "
@@ -140,18 +144,16 @@ class Text2MusicWithDrum(object):
         print(f"Generating music from text with drum condition, Input text: {text}, Drum: {music_filename}.")
         updated_music_filename = get_new_audio_name(music_filename, func_name="with_drum")
         drum, sr = torchaudio.load(music_filename)
-        self.model.set_generation_params(duration=30)
+        self.model.set_generation_params(duration=35)
         wav = self.model.generate_continuation(prompt=drum[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
                                                descriptions=[text] * GENERATION_CANDIDATE, progress=False)
         self.model.set_generation_params(duration=DURATION)
         # cut drum prompt
-        wav = wav[:, drum.shape[1]:drum.shape[1] + DURATION * sr]
-        # TODO: split tracks by beats
-
+        wav = wav[..., int(drum.shape[-1] / sr * self.model.sample_rate):]
+        splitted_audios = split_audio_tensor_by_downbeats(wav.cpu(), self.model.sample_rate, True)
         # select the best one by CLAP scores
-        best_wav, _ = CLAP_post_filter(CLAP_model, text, wav, self.model.sample_rate)
-        audio_write(updated_music_filename[:-4],
-                    best_wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
+        print(f"CLAP post filter for {len(splitted_audios)} candidates.")
+        best_wav, _ = CLAP_post_filter(CLAP_model, text, splitted_audios.cuda(), self.model.sample_rate)
         print(f"\nProcessed Text2MusicWithDrum, Output Music: {updated_music_filename}.")
         return updated_music_filename
 
@@ -160,7 +162,7 @@ class AddNewTrack(object):
     def __init__(self, device):
         print("Initializing AddNewTrack")
         self.device = device
-        self.model = musicgen_model_melody
+        self.model = musicgen_model
 
     @prompts(
         name="Add a new track to the given music loop",
@@ -172,23 +174,23 @@ class AddNewTrack(object):
 
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
-        text = description_to_attributes(text)
+        text = addtrack_demand_to_description(text)
         print(f"Adding a new track, Input text: {text}, Previous track: {music_filename}.")
-        updated_music_filename = get_new_audio_name(music_filename, func_name="add_track")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="addtrack")
         p_track, sr = torchaudio.load(music_filename)
-        self.model.set_generation_params(duration=30)
-        wav = self.model.generate_continuation(prompt=p_track[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
+        self.model.set_generation_params(duration=35)
+        wav = self.model.generate_continuation(prompt=p_track[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sample_rate=sr,
                                                descriptions=[text] * GENERATION_CANDIDATE, progress=False)
         self.model.set_generation_params(duration=DURATION)
         # cut drum prompt
-        wav = wav[:, p_track.shape[1]:p_track.shape[1] + DURATION * sr]
-        # TODO: split tracks by beats
-
+        wav = wav[..., int(p_track.shape[-1] / sr * self.model.sample_rate):]
+        splitted_audios = split_audio_tensor_by_downbeats(wav.cpu(), self.model.sample_rate, True)
         # select the best one by CLAP scores
-        best_wav, _ = CLAP_post_filter(CLAP_model, text, wav, self.model.sample_rate)
+        print(f"CLAP post filter for {len(splitted_audios)} candidates.")
+        best_wav, _ = CLAP_post_filter(CLAP_model, text, splitted_audios.cuda(), self.model.sample_rate)
         audio_write(updated_music_filename[:-4],
                     best_wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
-        print(f"\nProcessed Text2MusicWithDrum, Output Music: {updated_music_filename}.")
+        print(f"\nProcessed AddNewTrack, Output Music: {updated_music_filename}.")
         return updated_music_filename
 
 
@@ -217,7 +219,7 @@ class ExtractTrack(object):
         if mode == "extract":
             instrument_mode = instrument
         elif mode == "remove":
-            instrument_mode = f"no_{instrument}"
+            instrument_mode = f"no{instrument}"
         else:
             raise ValueError("mode must be `extract` or `remove`.")
 

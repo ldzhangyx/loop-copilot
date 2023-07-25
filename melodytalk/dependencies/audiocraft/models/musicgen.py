@@ -37,7 +37,7 @@ class MusicGen:
         lm (LMModel): Language model over discrete representations.
     """
     def __init__(self, name: str, compression_model: CompressionModel, lm: LMModel,
-                 max_duration: float = 30):
+                 max_duration: float = 40):
         self.name = name
         self.compression_model = compression_model
         self.lm = lm
