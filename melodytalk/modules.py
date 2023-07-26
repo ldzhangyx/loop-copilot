@@ -13,7 +13,7 @@ from melodytalk.dependencies import laion_clap
 
 from utils import *
 
-DURATION = 6
+DURATION = 8
 GENERATION_CANDIDATE = 5
 
 # Initialze common models
@@ -66,10 +66,9 @@ class GlobalAttributes(object):
 
 
 
-# attribute management
-global attribute_table
-attribute_table = GlobalAttributes()
 
+# attribute management
+attribute_table = GlobalAttributes()
 
 class Text2Music(object):
     def __init__(self, device):
@@ -86,6 +85,7 @@ class Text2Music(object):
 
     def inference(self, text):
         music_filename = os.path.join("music", f"{str(uuid.uuid4())[:8]}.wav")
+        attribute_table.descriptions = text
         text = description_to_attributes(text)  # convert text to attributes
         wav = self.model.generate([text], progress=False)
         wav = wav[0]  # batch size is 1
@@ -112,6 +112,7 @@ class Text2MusicWithMelody(object):
 
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        attribute_table.descriptions = text
         text = description_to_attributes(text)  # convert text to attributes
         print(f"Generating music from text with melody condition, Input Text: {text}, Melody: {music_filename}.")
         updated_music_filename = get_new_audio_name(music_filename, func_name="remix")
@@ -174,6 +175,7 @@ class AddNewTrack(object):
 
     def inference(self, inputs):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        attribute_table.descriptions = merge_description(attribute_table.descriptions, text)
         text = addtrack_demand_to_description(text)
         print(f"Adding a new track, Input text: {text}, Previous track: {music_filename}.")
         updated_music_filename = get_new_audio_name(music_filename, func_name="addtrack")
@@ -187,7 +189,7 @@ class AddNewTrack(object):
         splitted_audios = split_audio_tensor_by_downbeats(wav.cpu(), self.model.sample_rate, True)
         # select the best one by CLAP scores
         print(f"CLAP post filter for {len(splitted_audios)} candidates.")
-        best_wav, _ = CLAP_post_filter(CLAP_model, text, splitted_audios.cuda(), self.model.sample_rate)
+        best_wav, _ = CLAP_post_filter(CLAP_model, attribute_table.descriptions, splitted_audios.cuda(), self.model.sample_rate)
         audio_write(updated_music_filename[:-4],
                     best_wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
         print(f"\nProcessed AddNewTrack, Output Music: {updated_music_filename}.")

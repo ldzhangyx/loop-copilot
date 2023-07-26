@@ -122,6 +122,32 @@ def addtrack_demand_to_description(description: str) -> str:
 
     return response.choices[0].text
 
+def merge_description(description_1: str, description_2: str) -> str:
+    openai_prompt = f"""Please merge two descriptions into one.
+
+    S1: Please generate a rock music with drum and guitar for me.
+    S2: Please add a saxophone track to this music.
+    A: rock music with drum, guitar and saxophone.
+
+    S1: Please generate a love pop song with piano and violin for me.
+    S2: Please remove the piano.
+    A: love pop song with violin.
+
+    S1: {description_1}.
+    S2: {description_2}.
+    A: """
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+    )
+
+    return response.choices[0].text
 
 def chord_generation(description: str) -> tp.List:
     """ This function is a trick to generate chord sequence from the description.
@@ -216,7 +242,7 @@ def CLAP_post_filter(clap_model,
     # get the index of the most similar audio
     index = torch.argmax(similarity)
     best = audio_candidates[index].view(1, -1)
-    best = resampy.resample(best.cpu().numpy(), 48000, audio_sr, axis=-1)
+    best = torch.from_numpy(resampy.resample(best.cpu().numpy(), 48000, audio_sr, axis=-1))
     # return
     return best, similarity[index]
 

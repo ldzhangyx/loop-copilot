@@ -221,10 +221,18 @@ if __name__ == '__main__':
     if not os.path.exists("checkpoints"):
         os.mkdir("checkpoints")
     bot = ConversationBot()
+
     with gr.Blocks(css="#chatbot .overflow-y-auto{height:500px}") as demo:
+
+        gr.Markdown(
+            """This is a demo to our work *MelodyTalk*.
+            """
+        )
+
         lang = gr.Radio(choices=['Chinese', 'English'], value=None, label='Language')
         chatbot = gr.Chatbot(elem_id="chatbot", label="MelodyTalk")
         state = gr.State([])
+
         with gr.Row(visible=False) as input_raws:
             with gr.Column(scale=0.7):
                 txt = gr.Textbox(show_label=False, placeholder="Enter text and press enter, or upload an audio").style(
