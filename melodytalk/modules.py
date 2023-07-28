@@ -219,9 +219,10 @@ class ExtractTrack(object):
         print(f"{mode} {instrument} track from {music_filename}.")
 
         if mode == "extract":
-            instrument_mode = instrument
+            instrument_mode = instrument_mode_file = instrument
         elif mode == "remove":
             instrument_mode = f"no{instrument}"
+            instrument_mode_file = f"no_{instrument}"
         else:
             raise ValueError("mode must be `extract` or `remove`.")
 
@@ -234,13 +235,13 @@ class ExtractTrack(object):
         demucs.separate.main(self.params_list)
         # rename
         copyfile(
-            os.path.join("separated", "htdemucs_6s", music_filename[:-4].split("/")[-1],f"{instrument_mode}.wav"),
+            os.path.join("separated", "htdemucs_6s", music_filename[:-4].split("/")[-1],f"{instrument_mode_file}.wav"),
             updated_music_filename
         )
         # delete the folder
         # os.system(f"rm -rf {os.path.join('separated', 'htdemucs_6s')}")
 
-        print(f"Processed Source Separation, Input Music: {music_filename}, Output Instrument: {instrument_mode}.")
+        print(f"Processed Source Separation, Input Music: {music_filename}, Output Instrument: {instrument_mode_file}.")
         return updated_music_filename
 
 
