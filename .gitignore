@@ -157,4 +157,4 @@ melodytalk/music/
 *.pth
 *.wav
 
-*.DS_Store
+.DS_Store
