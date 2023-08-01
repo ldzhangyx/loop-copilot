@@ -10,6 +10,9 @@ from melodytalk.dependencies.audiocraft.data.audio import audio_write
 import demucs.separate
 # CLAP
 from melodytalk.dependencies import laion_clap
+# Vampnet
+from melodytalk.dependencies.vampnet.interface import Interface
+from melodytalk.dependencies.vampnet.main import vamp
 
 from utils import *
 
@@ -28,6 +31,15 @@ musicgen_model.set_generation_params(duration=DURATION)
 # Intialize CLIP post filter
 CLAP_model = laion_clap.CLAP_Module(enable_fusion=False, amodel="HTSAT-base", device="cuda")
 CLAP_model.load_ckpt("/home/intern-2023-02/melodytalk/melodytalk/pretrained/music_audioset_epoch_15_esc_90.14.pt")
+
+# Vampnet
+interface = Interface(
+    coarse_ckpt="./models/vampnet/coarse.pth",
+    coarse2fine_ckpt="./models/vampnet/c2f.pth",
+    codec_ckpt="./models/vampnet/codec.pth",
+    wavebeat_ckpt="./models/wavebeat.pth",
+    device="cuda" if torch.cuda.is_available() else "cpu",
+)
 
 @dataclass
 class GlobalAttributes(object):
@@ -94,18 +106,45 @@ class Text2Music(object):
         print(f"\nProcessed Text2Music, Input Text: {text}, Output Music: {music_filename}.")
         return music_filename
 
-class Text2MusicWithMelody(object):
+class Text2MusicWithTitle(object):
+    def __init__(self, device):
+        print("Initializing Text2MusicWithTitle")
+        self.device = device
+        self.model = musicgen_model
+
+    @prompts(
+        name="Generate music from user input when the input is a title of music",
+        description="useful if you want to generate music which is silimar  and save it to a file."
+                    "like: generate music of love pop song, or generate music with piano and violin."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the text description and the title."
+    )
+
+    def inference(self, inputs):
+        text, title = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        music_filename = os.path.join("music", f"{title}.wav")
+        text = music_title_to_description(text)  # using chatGPT's knowledge base to convert title to description
+        attribute_table.descriptions = text
+        text = description_to_attributes(text)  # convert text to attributes
+        wav = self.model.generate([text], progress=False)
+        wav = wav[0]  # batch size is 1
+        audio_write(music_filename[:-4],
+                    wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed Text2MusicWithTitle, Input Text: {text}, Output Music: {music_filename}.")
+        return music_filename
+
+class ReArrangement(object):
     def __init__(self, device):
         print("Initializing Text2MusicWithMelody")
         self.device = device
         self.model = musicgen_model
 
     @prompts(
-        name="Generate music from user input text with given melody condition",
-        description="useful if you want to style transfer or remix music with a user input text describing the target style and the original music."
+        name="Generate a new music arrangement with text indicating new style and previous music.",
+        description="useful if you want to style transfer or rearrange music with a user input text describing the target style and the previous music."
                     "Please use Text2MusicWithDrum instead if the condition is a single drum track."
                     "You shall not use it when no previous music file in the history."
-                    "like: remix the given melody with text description, or doing style transfer as text described with the given melody."
+                    "like: remix the given melody with text description, or doing style transfer as text described from previous music."
                     "The input to this tool should be a comma separated string of two, "
                     "representing the music_filename and the text description."
     )
@@ -328,8 +367,61 @@ class MusicCaptioning(object):
 
 
 class MusicInpainting(object):
-    def __init__(self):
-        raise NotImplementedError
+    def __init__(self, device):
+        print("Initializing MusicInpainting")
+        self.device = device
+        self.interface = interface
+
+    @prompts(
+        name="Inpaint a specific time region of the given music.",
+        description="useful if you want to inpaint or regenerate a specific region (must with explicit time start and ending) of music."
+                    "like: re-generate the 3s-5s part of this music."
+                    "The input to this tool should be a comma separated string of three, "
+                    "representing the music_filename, the start time (in second), and the end time (in second)."
+    )
+
+    def inference(self, inputs):
+        music_filename, start_time, end_time = inputs.split(",")[0].strip(), inputs.split(",")[1].strip(), inputs.split(",")[2].strip()
+        print(f"Inpainting a specific time region of the given music, Input Music: {music_filename}, Start Time: {start_time}, End Time: {end_time}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="inpainting_" + start_time + "_" + end_time)
+        p_track, sr = torchaudio.load(music_filename)
+        audio_length_in_second = p_track.shape[-1] / sr
+        if float(end_time) > audio_length_in_second:
+            print(f"Invalid end time, please check the input.")
+            end_time = audio_length_in_second
+        start_time, end_time = int(start_time), int(audio_length_in_second - float(end_time))
+        vamp(input_audio_path=music_filename,
+             output_audio_path=updated_music_filename,
+             interface=self.interface,
+             prefix_s=start_time,
+             suffix_s=end_time)
+        print(f"\nProcessed MusicInpainting, Output Music: {updated_music_filename}.")
+        return updated_music_filename
+
+class Variation(object):
+    def __init__(self, device):
+        print("Initializing Variation")
+        self.device = device
+        self.interface = interface
+
+    @prompts(
+        name="Generate a variation of given music.",
+        description="useful if you want to generate a variation of music, or re-generate the entire music track."
+                    "like: re-generate this music, or, generate a variant."
+                    "The input to this tool should be a single string, "
+                    "representing the music_filename."
+    )
+
+    def inference(self, inputs):
+        music_filename = inputs
+        print(f"Generate a variation of given music, Input Music: {music_filename}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="variation")
+        p_track, sr = torchaudio.load(music_filename)
+        vamp(input_audio_path=music_filename,
+             output_audio_path=updated_music_filename,
+             interface=self.interface,)
+        print(f"\nProcessed Variation, Output Music: {updated_music_filename}.")
+        return updated_music_filename
 
 # class Accompaniment(object):
 #     template_model = True

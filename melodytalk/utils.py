@@ -122,6 +122,31 @@ def addtrack_demand_to_description(description: str) -> str:
 
     return response.choices[0].text
 
+
+def music_title_to_description(description: str, use_api: bool = False) -> str:
+    if use_api:
+        raise NotImplementedError
+
+    openai_prompt = f"""Please transfer the music title to a description including genre, instruments and moods.
+
+    Q: Let it go
+    A: an anime pop song with vocal and piano arrangement, constructing a quiet and hopeful atmosphere.
+
+    Q: {description}
+    A: """
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+    )
+
+    return response.choices[0].text
+
 def merge_description(description_1: str, description_2: str) -> str:
     openai_prompt = f"""Please merge two descriptions into one.
 

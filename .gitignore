@@ -154,5 +154,7 @@ cython_debug/
 output/
 assets/
 melodytalk/music/
+*.pth
+*.wav
 
 .DS_Store

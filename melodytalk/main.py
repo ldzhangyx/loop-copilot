@@ -115,9 +115,12 @@ class ConversationBot(object):
     def __init__(self):
         load_dict = {"Text2Music": "cuda:0",
                      "ExtractTrack": "cuda:0",
-                     "Text2MusicWithMelody": "cuda:0",
+                     "ReArrangement": "cuda:0",
                      "Text2MusicWithDrum": "cuda:0",
-                     "AddNewTrack": "cuda:0"}
+                     "Text2MusicWithTitle": "cuda:0",
+                     "AddNewTrack": "cuda:0",
+                     "MusicInpainting": "cuda:0",
+                     "Variation": "cuda:0",}
         template_dict = None  # { "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
 
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
