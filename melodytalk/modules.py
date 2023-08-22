@@ -324,7 +324,18 @@ class ExtractTrack(object):
 
 class MusicCaptioning(object):
     def __init__(self):
-        raise NotImplementedError
+        print("Initializing MusicCaptioning")
+
+    @prompts(
+        name="Describe the current music.",
+        description="useful if you want to describe a music."
+                    "Like: describe the current music, or what is the current music sounds like."
+                    "The input to this tool should be the music_filename. "
+    )
+
+    def inference(self, inputs):
+        pass
+
 
 # class Text2MusicwithChord(object):
 #     template_model = True

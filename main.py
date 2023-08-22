@@ -6,6 +6,7 @@ from melodytalk.dependencies.audiocraft.data.audio import audio_write
 from melodytalk.dependencies.laion_clap.hook import CLAP_Module
 from datetime import datetime
 import torch
+import demucs.separate
 from melodytalk.utils import CLAP_post_filter
 
 MODEL_NAME = 'melody'
@@ -13,7 +14,7 @@ DURATION = 35
 CFG_COEF = 3
 SAMPLES = 5
 # PROMPT = 'music loop. Passionate love song with guitar rhythms, electric piano chords, drums pattern. instrument: guitar, piano, drum.'
-PROMPT = "music loop with saxophone solo. instrument: saxophone."
+PROMPT = "music loop with a very strong and rhythmic drum pattern."
 melody_conditioned = True
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -38,7 +39,9 @@ def generate():
     if not melody_conditioned:
         wav = model.generate(descriptions, progress=True)  # generates 3 samples.
     else:
-        melody, sr = torchaudio.load('/home/intern-2023-02/melodytalk/assets/20230705-155518_3.wav')
+        # demucs.separate.main(["-n", "htdemucs_6s", "--two-stems", 'drums', '/home/intern-2023-02/melodytalk/assets/20230705-155518_3.wav' ])
+        melody, sr = torchaudio.load('/home/intern-2023-02/melodytalk/separated/htdemucs_6s/20230705-155518_3/no_drums.wav')
+
         wav = model.generate_continuation(melody[None].expand(SAMPLES, -1, -1), sr, descriptions, progress=True)
         # the generated wav contains the melody input, we need to cut it
         wav = wav[..., int(melody.shape[-1] / sr * model.sample_rate):]
