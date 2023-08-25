@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from lpmc.music_captioning.model.modules import AudioEncoder
+from melodytalk.dependencies.lpmc.music_captioning.model.modules import AudioEncoder
 from transformers import BartForConditionalGeneration, BartTokenizer, BartConfig
 
 class BartCaptionModel(nn.Module):

@@ -1,7 +1,10 @@
 from shutil import copyfile
 from dataclasses import dataclass
 
+import librosa
 import torch
+import torchaudio.functional
+import pedalboard
 
 # text2music
 from melodytalk.dependencies.audiocraft.models import MusicGen
@@ -13,11 +16,13 @@ from melodytalk.dependencies import laion_clap
 # Vampnet
 from melodytalk.dependencies.vampnet.interface import Interface
 from melodytalk.dependencies.vampnet.main import vamp
+# captioning
+from melodytalk.dependencies.lpmc.music_captioning.captioning import main as captioning
 
 from utils import *
 
 DURATION = 8
-GENERATION_CANDIDATE = 5
+GENERATION_CANDIDATE = 6
 
 # Initialze common models
 # musicgen_model = MusicGen.get_pretrained('large')
@@ -34,12 +39,15 @@ CLAP_model.load_ckpt("/home/intern-2023-02/melodytalk/melodytalk/pretrained/musi
 
 # Vampnet
 interface = Interface(
-    coarse_ckpt="./models/vampnet/coarse.pth",
-    coarse2fine_ckpt="./models/vampnet/c2f.pth",
-    codec_ckpt="./models/vampnet/codec.pth",
-    wavebeat_ckpt="./models/wavebeat.pth",
+    coarse_ckpt="./dependencies/vampnet/models/vampnet/coarse.pth",
+    coarse2fine_ckpt="./dependencies/vampnet/models/vampnet/c2f.pth",
+    codec_ckpt="./dependencies/vampnet/models/vampnet/codec.pth",
+    wavebeat_ckpt="./dependencies/vampnet/models/wavebeat.pth",
     device="cuda" if torch.cuda.is_available() else "cpu",
 )
+
+# captioning model
+
 
 @dataclass
 class GlobalAttributes(object):
@@ -114,16 +122,16 @@ class Text2MusicWithTitle(object):
 
     @prompts(
         name="Generate music from user input when the input is a title of music",
-        description="useful if you want to generate music which is silimar  and save it to a file."
-                    "like: generate music of love pop song, or generate music with piano and violin."
-                    "The input to this tool should be a comma separated string of two, "
-                    "representing the text description and the title."
+        description="useful if you want to generate music which feels like an real music."
+                    "like: generate music that feels like 'hey jude', or generate music similar to 'let it be'."
+                    "The input to this tool should be a string, "
+                    "representing the music title."
     )
 
     def inference(self, inputs):
-        text, title = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        title = inputs
         music_filename = os.path.join("music", f"{title}.wav")
-        text = music_title_to_description(text)  # using chatGPT's knowledge base to convert title to description
+        text = music_title_to_description(title)  # using chatGPT's knowledge base to convert title to description
         attribute_table.descriptions = text
         text = description_to_attributes(text)  # convert text to attributes
         wav = self.model.generate([text], progress=False)
@@ -182,10 +190,10 @@ class Text2MusicWithDrum(object):
         music_filename, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
         text = description_to_attributes(text)
         print(f"Generating music from text with drum condition, Input text: {text}, Drum: {music_filename}.")
-        updated_music_filename = get_new_audio_name(music_filename, func_name="with_drum")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="withdrum")
         drum, sr = torchaudio.load(music_filename)
         self.model.set_generation_params(duration=35)
-        wav = self.model.generate_continuation(prompt=drum[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sr=sr,
+        wav = self.model.generate_continuation(prompt=drum[None].expand(GENERATION_CANDIDATE, -1, -1), prompt_sample_rate=sr,
                                                descriptions=[text] * GENERATION_CANDIDATE, progress=False)
         self.model.set_generation_params(duration=DURATION)
         # cut drum prompt
@@ -229,6 +237,7 @@ class AddNewTrack(object):
         # select the best one by CLAP scores
         print(f"CLAP post filter for {len(splitted_audios)} candidates.")
         best_wav, _ = CLAP_post_filter(CLAP_model, attribute_table.descriptions, splitted_audios.cuda(), self.model.sample_rate)
+        best_wav = torch.from_numpy(librosa.effects.trim(best_wav.cpu().numpy())[0])
         audio_write(updated_music_filename[:-4],
                     best_wav.cpu(), self.model.sample_rate, strategy="loudness", loudness_compressor=True)
         print(f"\nProcessed AddNewTrack, Output Music: {updated_music_filename}.")
@@ -334,7 +343,12 @@ class MusicCaptioning(object):
     )
 
     def inference(self, inputs):
-        pass
+        music_filename = inputs.strip()
+        print(f"Captioning the current music, Input Music: {music_filename}.")
+        captions = captioning(music_filename)
+        captions_text = captions[0]["text"]
+        print(f"\nProcessed MusicCaptioning, Output Captions: {captions_text}.")
+        return captions_text
 
 
 # class Text2MusicwithChord(object):
@@ -375,7 +389,59 @@ class MusicCaptioning(object):
 #         print(f"\nProcessed Text2Music, Input Text: {preprocessed_input}, Output Music: {music_filename}.")
 #         return music_filename
 
+class PitchShifting(object):
+    def __init__(self, device):
+        print("Initializing PitchShifting")
+        self.device = device
 
+    @prompts(
+        name="Shift the pitch of the given music.",
+        description="useful if you want to shift the pitch of a music."
+                    "Like: shift the pitch of this music by 3 semitones."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the music_filename and the pitch shift value."
+    )
+
+    def inference(self, inputs):
+        music_filename, pitch_shift_value = inputs.split(",")[0].strip(), int(inputs.split(",")[1].strip())
+        print(f"Shifting the pitch of the given music, Input Music: {music_filename}, Pitch Shift Value: {pitch_shift_value}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="pitchshifting")
+        # load
+        wav, sr = torchaudio.load(music_filename)
+        # shift
+        wav = torchaudio.functional.pitch_shift(wav, sr, pitch_shift_value)
+        # write
+        audio_write(updated_music_filename[:-4],
+                    wav.cpu(), sr, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed PitchShifting, Output Music: {updated_music_filename}.")
+        return updated_music_filename
+
+class TimeStretching(object):
+    def __init__(self, device):
+        print("Initializing TimeStretching")
+        self.device = device
+
+    @prompts(
+        name="Stretch the time of the given music.",
+        description="useful if you want to stretch the time of a music."
+                    "Like: stretch the time of this music by 1.5."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the music_filename and the time stretch value."
+    )
+
+    def inference(self, inputs):
+        music_filename, time_stretch_value = inputs.split(",")[0].strip(), float(inputs.split(",")[1].strip())
+        print(f"Stretching the time of the given music, Input Music: {music_filename}, Time Stretch Value: {time_stretch_value}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="timestretching")
+        # load
+        wav, sr = torchaudio.load(music_filename)
+        # stretch
+        wav = torchaudio.functional.speed(wav, sr, time_stretch_value)[0]
+        # write
+        audio_write(updated_music_filename[:-4],
+                    wav.cpu(), sr, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed TimeStretching, Output Music: {updated_music_filename}.")
+        return updated_music_filename
 
 class MusicInpainting(object):
     def __init__(self, device):
@@ -394,7 +460,7 @@ class MusicInpainting(object):
     def inference(self, inputs):
         music_filename, start_time, end_time = inputs.split(",")[0].strip(), inputs.split(",")[1].strip(), inputs.split(",")[2].strip()
         print(f"Inpainting a specific time region of the given music, Input Music: {music_filename}, Start Time: {start_time}, End Time: {end_time}.")
-        updated_music_filename = get_new_audio_name(music_filename, func_name="inpainting_" + start_time + "_" + end_time)
+        updated_music_filename = get_new_audio_name(music_filename, func_name="inpainting")
         p_track, sr = torchaudio.load(music_filename)
         audio_length_in_second = p_track.shape[-1] / sr
         if float(end_time) > audio_length_in_second:
@@ -434,34 +500,63 @@ class Variation(object):
         print(f"\nProcessed Variation, Output Music: {updated_music_filename}.")
         return updated_music_filename
 
-# class Accompaniment(object):
-#     template_model = True
-#     def __init__(self, Text2MusicWithMelody, ExtractTrack, SimpleTracksMixing):
-#         print("Initializing Accompaniment")
-#         self.Text2MusicWithMelody = Text2MusicWithMelody
-#         self.ExtractTrack = ExtractTrack
-#         self.SimpleTracksMixing = SimpleTracksMixing
+class SingleSoundEffect(object):
+    def __init__(self, device):
+        print("Initializing SingleSoundEffect")
+        self.device = device
+        self.interface = interface
+
+    @prompts(
+        name="Add a single sound effect to the given music.",
+        description="useful if you want to add a single sound effect, like reverb, high pass filter or chorus to the given music."
+                    "like: add a reverb of recording studio to this music."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the music_filename and the original user message."
+    )
+
+    def inference(self, inputs):
+        music_filename, user_message = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        print(f"Add a single sound effect to the given music, Input Music: {music_filename}, Sound Effect Name: {user_message}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="single_sound_effect")
+        sound_effect = add_single_sound_effect(user_message)
+        my_pedalboard = pedalboard.Pedalboard()
+        my_pedalboard.append(eval(sound_effect))
+        input_audio, sr = torchaudio.load(music_filename)
+        output_audio = my_pedalboard(input_audio.numpy(), sample_rate=sr)
+        audio_write(updated_music_filename[:-4],
+                    output_audio, sr, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed SingleSoundEffect, Output Music: {updated_music_filename}.")
+        return updated_music_filename
+
+
+# class TimbreTransfer(object):
+#     def __init__(self, device):
+#             print("Initializing TimbreTransfer")
+#             self.device = device
+#             self.interface = interface
 #
-#     @prompts(
-#         name="Generate accompaniment music from user input text, keeping the given melody or track",
-#         description="useful if you want to style transfer or remix music from a user input text with a given melody."
-#                     "Unlike Text2MusicWithMelody, this tool will keep the given melody track instead of re-generate it."
-#                     "Note that the user must assign a track (it must be one of `vocals`, `drums`, `bass`, `guitar`, `piano` or `other`) to keep."
-#                     "like: keep the guitar track and remix the given music with text description, "
-#                     "or generate accompaniment as text described with the given vocal track."
-#                     "The input to this tool should be a comma separated string of three, "
-#                     "representing the music_filename, track name, and the text description."
-#     )
+#         @prompts(
+#             name="Transfer the timbre of the given music to another music.",
+#             description="useful if you want to transfer the timbre of the given music to another music."
+#                         "like: transfer the timbre of this music to another music."
+#                         "The input to this tool should be a comma separated string of two, "
+#                         "representing the music_filename and the original user message."
+#         )
 #
 #     def inference(self, inputs):
-#         music_filename, track_name, text = inputs.split(",")[0].strip(), inputs.split(",")[1].strip(), inputs.split(",")[2].strip()
-#         print(f"Generating music from text with accompaniment condition, Input Text: {text}, Previous music: {music_filename}, Track: {track_name}.")
-#         # separate the track
-#         updated_main_track = self.ExtractTrack.inference(f"{music_filename}, {track_name}, extract")
-#         # generate music
-#         updated_new_music = self.Text2MusicWithMelody.inference(f"{updated_main_track}, {text}")
-#         # remove the track in accompaniment
-#         updated_accompaniment = self.ExtractTrack.inference(f"{updated_new_music}, {track_name}, remove")
-#         # mix
-#         updated_music_filename = self.SimpleTracksMixing.inference(f"{updated_main_track}, {updated_accompaniment}")
+#         music_filename, user_message = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+#         print(f"Transfer the timbre of the given music to another music, Input Music: {music_filename}, Target Music: {user_message}.")
+#         updated_music_filename = get_new_audio_name(music_filename, func_name="timbre_transfer")
+#         target_music_filename = get_new_audio_name(user_message, func_name="timbre_transfer")
+#         # load
+#         wav, sr = torchaudio.load(music_filename)
+#         target_wav, target_sr = torchaudio.load(user_message)
+#         # stretch
+#         wav = torchaudio.functional.time_stretch(wav, sr, target_sr/sr)[0]
+#         # write
+#         audio_write(updated_music_filename[:-4],
+#                     wav.cpu(), sr, strategy="loudness", loudness_compressor=True)
+#         audio_write(target_music_filename[:-4],
+#                     target_wav.cpu(), target_sr, strategy="loudness", loudness_compressor=True)
+#         print(f"\nProcessed TimbreTransfer, Output Music: {updated_music_filename}.")
 #         return updated_music_filename

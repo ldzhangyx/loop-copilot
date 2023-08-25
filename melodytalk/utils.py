@@ -301,5 +301,43 @@ def split_audio_tensor_by_downbeats(input_audio_batch: torch.Tensor, sr: int = 3
 
     return segments
 
+def add_single_sound_effect(input: str) -> str:
+    openai_prompt = f"""You are asked to pick the most appropriate one of the APIs below to achieve the desired sound effects. You MUST loyally only assign the existing parameters to fine-tune the function. If you use the default param value, skip it.
 
+    1. Guitar-style effects: 
+        - Chorus(rate_hz: float = 1.0, depth: float = 0.25, centre_delay_ms: float = 7.0, feedback: float = 0.0, mix: float = 0.5);
+        - Distortion(drive_db: float = 25);
+        - Phaser(rate_hz: float = 1.0, depth: float = 0.5, centre_frequency_hz: float = 1300.0, feedback: float = 0.0, mix: float = 0.5);
+        - Clipping(threshold_db: float = -6.0);
+    2. Loudness and dynamic range effects: 
+        - Compressor(threshold_db: float = 0, ratio: float = 1, attack_ms: float = 1.0, release_ms: float = 100);
+        - Gain(gain_db: float = 1.0);
+        - Limiter(threshold_db: float = -10.0, release_ms: float = 100.0);
+    3. Equalizers and filters: 
+        - HighpassFilter(cutoff_frequency_hz: float = 50);
+        - LadderFilter(mode: Mode = Mode.LPF12, cutoff_hz: float = 200, resonance: float = 0, drive: float = 1.0);
+        - LowpassFilter(cutoff_frequency_hz: float = 50);
+    4. Spatial effects: 
+        - Convolution(impulse_response_filename: str, mix: float = 1.0);
+        - Delay(delay_seconds: float = 0.5, feedback: float = 0.0, mix: float = 0.5);
+        - Reverb(room_size: float = 0.5, damping: float = 0.5, wet_level: float = 0.33, dry_level: float = 0.4, width: float = 1.0, freeze_mode: float = 0.0);
+    
+    Let us think step by step.
+    
+    Q: I want to use a 200hz highpass filter to this audio.
+    A: pedalboard.HighpassFilter(cutoff_frequency_hz=200);
 
+    Q: {input}.
+    A: """
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=openai_prompt,
+        temperature=0,
+        max_tokens=100,
+        top_p=1,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+    )
+
+    return response.choices[0].text

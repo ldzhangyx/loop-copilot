@@ -45,9 +45,11 @@ def get_audio(audio_path, duration=10, target_sr=16000):
     audio = torch.from_numpy(np.stack(np.split(audio[:ceil * n_samples], ceil)).astype('float32'))
     return audio
     
-def main():
+def main(audio_path=None):
     args = parser.parse_args()
-    captioning(args)
+    if audio_path is not None:
+        args.audio_path = audio_path
+    return captioning(args)
  
 def captioning(args):
     save_dir = f"exp/{args.framework}/{args.caption_type}/"
@@ -74,6 +76,7 @@ def captioning(args):
         item = {"text":text,"time":time}
         inference[chunk] = item
         print(item)
+    return inference
 
 if __name__ == '__main__':
     main()

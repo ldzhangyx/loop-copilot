@@ -120,7 +120,11 @@ class ConversationBot(object):
                      "Text2MusicWithTitle": "cuda:0",
                      "AddNewTrack": "cuda:0",
                      "MusicInpainting": "cuda:0",
-                     "Variation": "cuda:0",}
+                     "Variation": "cuda:0",
+                     "PitchShifting": "cuda:0",
+                     "TimeStretching": "cuda:0",
+                     "SingleSoundEffect": "cuda:0",
+                     }
         template_dict = None  # { "Text2MusicwithChord": "cuda:0"} # "Accompaniment": "cuda:0",
 
         print(f"Initializing MelodyTalk, load_dict={load_dict}, template_dict={template_dict}")
@@ -227,19 +231,24 @@ if __name__ == '__main__':
 
     with gr.Blocks(css="#chatbot .overflow-y-auto{height:500px}") as demo:
 
-        gr.Markdown(
-            """This is a demo to our work *MelodyTalk*.
-            """
-        )
+        gr.Markdown("""
+        ## MelodyTalk
+        ### MelodyTalk is a ChatGPT-based interface for making music loops. All supported tools are listed below.
+        ### Usage: 
+        ### Step 1: Describe the music loop you want to make. You can assign genre, instrument, bpm, mood in your text.
+        ### Step 2: You can finetune the generated music loop using existing tools.
+        """)
 
         lang = gr.Radio(choices=['Chinese', 'English'], value=None, label='Language')
         chatbot = gr.Chatbot(elem_id="chatbot", label="MelodyTalk")
         state = gr.State([])
 
         with gr.Row(visible=False) as input_raws:
-            with gr.Column(scale=0.7):
+            with gr.Column(scale=0.55):
                 txt = gr.Textbox(show_label=False, placeholder="Enter text and press enter, or upload an audio").style(
                     container=False)
+            with gr.Column(scale=0.15, min_width=0):
+                undo = gr.Button("Undo")
             with gr.Column(scale=0.15, min_width=0):
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
@@ -253,6 +262,32 @@ if __name__ == '__main__':
             with gr.Column(scale=0.15, min_width=0):
                 rec_submit = gr.Button("Submit")
 
+
+        gr.Markdown(
+            """| Task | Stage | Examples of text input | Backend models |
+        | --- | --- | --- | --- |
+        | Text to music | 1 | Generate a rock music loop with guitar and drums. | MusicGen |
+        | Drum pattern to music | 1 | Generate a rock music with guitar based on this drum. | MusicGen, CLAP |
+        | Impression to music | 1 | Generate a music loop feels like "Hey Jude"'s choral part. | ChatGPT, MusicGen |
+        | Stylistic rearrangement | 1 | Rearrange this music audio to jazz with saxophone solo. | MusicGen |
+        | Music variation | 1 | Generate a music loop sounds like this music. | VampNet |
+        | Add a track | 2 | Add a saxophone solo to this music loop. | MusicGen, CLAP |
+        | Remove a track | 2 | Remove the guitar from this music loop. | Demucs |
+        | Re-generation/inpainting | 2 | Re-generate the 3-5s part of the music loop. | VampNet |
+        | Pitch shifting | 2 | Shift this music by 3 semitone. | pedalboard |
+        | Speed changing | 2 | Speed up this music by 1.2. | torchaudio |
+        | Add sound effects| 2 | Add some reverb to the guitar solo. | pedalboard, automix-tools |
+        | Music captioning | N/A | Describe the current music loop. | LP-MusicCaps |
+        | * Replace instrument (unavailable) | 2 | Replace the guitar solo by piano. | Transplayer, automix-tools |
+        | * Timbre adjustment (unavailable) | 2 | Make the drum to sound more metallic. | ChatGPT, pedalboard, automix-tools |
+                    """
+                )
+
+        gr.Markdown("""
+        Currently, MelodyTalk still does not support music content style transfer, such as 'make this music more relax.' Please wait for our future work.
+        """)
+
+
         lang.change(bot.init_agent, [lang], [input_raws, lang, txt, clear, record_raws])
         txt.submit(bot.run_text, [txt, state], [chatbot, state])
         txt.submit(lambda: "", None, txt)
@@ -265,5 +300,5 @@ if __name__ == '__main__':
         clear.click(lambda: [], None, chatbot)
         clear.click(lambda: [], None, state)
         clear.click(bot.clear_input_audio, None, rec_audio)
-    demo.launch(server_name="0.0.0.0", server_port=7860,
+    demo.launch(server_name="0.0.0.0", server_port=7862,
                 ssl_certfile="cert.pem", ssl_keyfile="key.pem", ssl_verify=False)
