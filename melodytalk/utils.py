@@ -325,7 +325,7 @@ def add_single_sound_effect(input: str) -> str:
     Let us think step by step.
     
     Q: I want to use a 200hz highpass filter to this audio.
-    A: pedalboard.HighpassFilter(cutoff_frequency_hz=200);
+    A: pedalboard.HighpassFilter(cutoff_frequency_hz=200)
 
     Q: {input}.
     A: """

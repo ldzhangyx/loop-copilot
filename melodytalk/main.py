@@ -118,7 +118,6 @@ class ConversationBot(object):
                      "ReArrangement": "cuda:0",
                      "Text2MusicWithDrum": "cuda:0",
                      "Text2MusicWithTitle": "cuda:0",
-                     "AddNewTrack": "cuda:0",
                      "MusicInpainting": "cuda:0",
                      "Variation": "cuda:0",
                      "PitchShifting": "cuda:0",
@@ -193,6 +192,13 @@ class ConversationBot(object):
         #       f"Current Memory: {self.agent.memory.buffer}")
         return state, state
 
+    def redo(self, state):
+        state = state[:-1]
+        text = self.agent.memory.chat_memory.messages[-1].content
+        state = state[:-1]
+        self.agent.memory.chat_memory.messages = self.self.agent.memory.chat_memory.messages[:-2]
+        return self.run_text(text, state)
+
     def run_audio(self, file, state, txt, lang):
         music_filename = os.path.join('music', str(uuid.uuid4())[0:8] + ".wav")
         print("Inputs:", file, state)
@@ -248,7 +254,7 @@ if __name__ == '__main__':
                 txt = gr.Textbox(show_label=False, placeholder="Enter text and press enter, or upload an audio").style(
                     container=False)
             with gr.Column(scale=0.15, min_width=0):
-                undo = gr.Button("Undo")
+                redo = gr.Button("Redo")
             with gr.Column(scale=0.15, min_width=0):
                 clear = gr.Button("Clear")
             with gr.Column(scale=0.15, min_width=0):
@@ -271,15 +277,12 @@ if __name__ == '__main__':
         | Impression to music | 1 | Generate a music loop feels like "Hey Jude"'s choral part. | ChatGPT, MusicGen |
         | Stylistic rearrangement | 1 | Rearrange this music audio to jazz with saxophone solo. | MusicGen |
         | Music variation | 1 | Generate a music loop sounds like this music. | VampNet |
-        | Add a track | 2 | Add a saxophone solo to this music loop. | MusicGen, CLAP |
         | Remove a track | 2 | Remove the guitar from this music loop. | Demucs |
         | Re-generation/inpainting | 2 | Re-generate the 3-5s part of the music loop. | VampNet |
         | Pitch shifting | 2 | Shift this music by 3 semitone. | pedalboard |
         | Speed changing | 2 | Speed up this music by 1.2. | torchaudio |
         | Add sound effects| 2 | Add some reverb to the guitar solo. | pedalboard, automix-tools |
         | Music captioning | N/A | Describe the current music loop. | LP-MusicCaps |
-        | * Replace instrument (unavailable) | 2 | Replace the guitar solo by piano. | Transplayer, automix-tools |
-        | * Timbre adjustment (unavailable) | 2 | Make the drum to sound more metallic. | ChatGPT, pedalboard, automix-tools |
                     """
                 )
 
@@ -292,7 +295,7 @@ if __name__ == '__main__':
         txt.submit(bot.run_text, [txt, state], [chatbot, state])
         txt.submit(lambda: "", None, txt)
         btn.upload(bot.run_audio, [btn, state, txt, lang], [chatbot, state])
-
+        redo.click(bot.redo, [state], [chatbot, state])
         rec_submit.click(bot.run_recording, [rec_audio, state, txt, lang], [chatbot, state])
         rec_clear.click(bot.clear_input_audio, None, rec_audio)
 

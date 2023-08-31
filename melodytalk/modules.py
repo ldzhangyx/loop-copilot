@@ -517,46 +517,46 @@ class SingleSoundEffect(object):
     def inference(self, inputs):
         music_filename, user_message = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
         print(f"Add a single sound effect to the given music, Input Music: {music_filename}, Sound Effect Name: {user_message}.")
-        updated_music_filename = get_new_audio_name(music_filename, func_name="single_sound_effect")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="singlesoundeffect")
         sound_effect = add_single_sound_effect(user_message)
         my_pedalboard = pedalboard.Pedalboard()
         my_pedalboard.append(eval(sound_effect))
         input_audio, sr = torchaudio.load(music_filename)
         output_audio = my_pedalboard(input_audio.numpy(), sample_rate=sr)
         audio_write(updated_music_filename[:-4],
-                    output_audio, sr, strategy="loudness", loudness_compressor=True)
+                    torch.from_numpy(output_audio), sr, strategy="loudness", loudness_compressor=True)
         print(f"\nProcessed SingleSoundEffect, Output Music: {updated_music_filename}.")
         return updated_music_filename
 
 
-# class TimbreTransfer(object):
-#     def __init__(self, device):
-#             print("Initializing TimbreTransfer")
-#             self.device = device
-#             self.interface = interface
-#
-#         @prompts(
-#             name="Transfer the timbre of the given music to another music.",
-#             description="useful if you want to transfer the timbre of the given music to another music."
-#                         "like: transfer the timbre of this music to another music."
-#                         "The input to this tool should be a comma separated string of two, "
-#                         "representing the music_filename and the original user message."
-#         )
-#
-#     def inference(self, inputs):
-#         music_filename, user_message = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
-#         print(f"Transfer the timbre of the given music to another music, Input Music: {music_filename}, Target Music: {user_message}.")
-#         updated_music_filename = get_new_audio_name(music_filename, func_name="timbre_transfer")
-#         target_music_filename = get_new_audio_name(user_message, func_name="timbre_transfer")
-#         # load
-#         wav, sr = torchaudio.load(music_filename)
-#         target_wav, target_sr = torchaudio.load(user_message)
-#         # stretch
-#         wav = torchaudio.functional.time_stretch(wav, sr, target_sr/sr)[0]
-#         # write
-#         audio_write(updated_music_filename[:-4],
-#                     wav.cpu(), sr, strategy="loudness", loudness_compressor=True)
-#         audio_write(target_music_filename[:-4],
-#                     target_wav.cpu(), target_sr, strategy="loudness", loudness_compressor=True)
-#         print(f"\nProcessed TimbreTransfer, Output Music: {updated_music_filename}.")
-#         return updated_music_filename
+class TimbreTransfer(object):
+    def __init__(self, device):
+            print("Initializing TimbreTransfer")
+            self.device = device
+            self.interface = interface
+
+    @prompts(
+        name="Transfer the timbre of the given music to another music.",
+        description="useful if you want to transfer the timbre of the given music to another music."
+                    "like: transfer the timbre of this music to another music."
+                    "The input to this tool should be a comma separated string of two, "
+                    "representing the music_filename and the original user message."
+    )
+
+    def inference(self, inputs):
+        music_filename, user_message = inputs.split(",")[0].strip(), inputs.split(",")[1].strip()
+        print(f"Transfer the timbre of the given music to another music, Input Music: {music_filename}, Target Music: {user_message}.")
+        updated_music_filename = get_new_audio_name(music_filename, func_name="timbre_transfer")
+        target_music_filename = get_new_audio_name(user_message, func_name="timbre_transfer")
+        # load
+        wav, sr = torchaudio.load(music_filename)
+        target_wav, target_sr = torchaudio.load(user_message)
+        # stretch
+        wav = torchaudio.functional.time_stretch(wav, sr, target_sr/sr)[0]
+        # write
+        audio_write(updated_music_filename[:-4],
+                    wav.cpu(), sr, strategy="loudness", loudness_compressor=True)
+        audio_write(target_music_filename[:-4],
+                    target_wav.cpu(), target_sr, strategy="loudness", loudness_compressor=True)
+        print(f"\nProcessed TimbreTransfer, Output Music: {updated_music_filename}.")
+        return updated_music_filename
