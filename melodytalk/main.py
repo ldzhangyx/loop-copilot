@@ -238,8 +238,8 @@ if __name__ == '__main__':
     with gr.Blocks(css="#chatbot .overflow-y-auto{height:500px}") as demo:
 
         gr.Markdown("""
-        ## MelodyTalk
-        ### MelodyTalk is a ChatGPT-based interface for making music loops. All supported tools are listed below.
+        ## Loop Copilot
+        ### Loop Copilot is a ChatGPT-based interface for making music loops. All supported tools are listed below.
         ### Usage: 
         ### Step 1: Describe the music loop you want to make. You can assign genre, instrument, bpm, mood in your text.
         ### Step 2: You can finetune the generated music loop using existing tools.
