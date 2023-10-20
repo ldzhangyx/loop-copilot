@@ -1,3 +1,4 @@
 # Loop Copilot
-![](logo.png)
- 
+
+<img src="logo.png" alt="drawing" width="200"/>
+
