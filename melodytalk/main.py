@@ -246,7 +246,7 @@ if __name__ == '__main__':
         """)
 
         lang = gr.Radio(choices=['Chinese', 'English'], value=None, label='Language')
-        chatbot = gr.Chatbot(elem_id="chatbot", label="MelodyTalk")
+        chatbot = gr.Chatbot(elem_id="chatbot", label="Loop Copilot")
         state = gr.State([])
 
         with gr.Row(visible=False) as input_raws:
@@ -277,6 +277,7 @@ if __name__ == '__main__':
         | Impression to music | 1 | Generate a music loop feels like "Hey Jude"'s choral part. | ChatGPT, MusicGen |
         | Stylistic rearrangement | 1 | Rearrange this music audio to jazz with saxophone solo. | MusicGen |
         | Music variation | 1 | Generate a music loop sounds like this music. | VampNet |
+        | Add a track    |  2 | Add a saxophone track to this music. | MusicGen  |
         | Remove a track | 2 | Remove the guitar from this music loop. | Demucs |
         | Re-generation/inpainting | 2 | Re-generate the 3-5s part of the music loop. | VampNet |
         | Pitch shifting | 2 | Shift this music by 3 semitone. | pedalboard |
